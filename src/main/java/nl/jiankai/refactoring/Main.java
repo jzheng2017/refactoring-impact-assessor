@@ -1,7 +1,8 @@
 package nl.jiankai.refactoring;
 
+import nl.jiankai.refactoring.core.refactoring.*;
 import nl.jiankai.refactoring.refactoring.*;
-import nl.jiankai.refactoring.refactoring.javaparser.JavaParserRefactoringImpactAssessor;
+import nl.jiankai.refactoring.core.refactoring.javaparser.JavaParserRefactoringImpactAssessor;
 
 public class Main {
     public static void main(String[] args) {
