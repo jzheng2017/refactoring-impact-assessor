@@ -34,7 +34,6 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-simple</artifactId>
       <version>2.0.9</version>
-      <scope>test</scope>
     </dependency>
     <!-- https://mvnrepository.com/artifact/com.github.javaparser/javaparser-core -->
     <dependency>
@@ -43,16 +42,11 @@
       <version>3.25.5</version>
     </dependency>
     <!-- https://mvnrepository.com/artifact/com.github.javaparser/java-symbol-solver-core -->
+    <!-- https://mvnrepository.com/artifact/com.github.javaparser/javaparser-symbol-solver-core -->
     <dependency>
       <groupId>com.github.javaparser</groupId>
-      <artifactId>java-symbol-solver-core</artifactId>
-      <version>0.6.3</version>
-    </dependency>
-    <!-- https://mvnrepository.com/artifact/org.apache.maven/maven-model -->
-    <dependency>
-      <groupId>org.apache.maven</groupId>
-      <artifactId>maven-model</artifactId>
-      <version>3.9.4</version>
+      <artifactId>javaparser-symbol-solver-core</artifactId>
+      <version>3.25.5</version>
     </dependency>
     <!-- https://mvnrepository.com/artifact/org.apache.maven.shared/maven-invoker -->
     <dependency>
@@ -71,6 +65,24 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>2.15.2</version>
+    </dependency>
+    <!-- https://mvnrepository.com/artifact/org.jboss.shrinkwrap.resolver/shrinkwrap-resolver-api-maven -->
+    <dependency>
+      <groupId>org.jboss.shrinkwrap.resolver</groupId>
+      <artifactId>shrinkwrap-resolver-api-maven</artifactId>
+      <version>3.2.1</version>
+    </dependency>
+    <!-- https://mvnrepository.com/artifact/org.jboss.shrinkwrap.resolver/shrinkwrap-resolver-impl-maven -->
+    <dependency>
+      <groupId>org.jboss.shrinkwrap.resolver</groupId>
+      <artifactId>shrinkwrap-resolver-impl-maven</artifactId>
+      <version>3.2.1</version>
+    </dependency>
+    <!-- https://mvnrepository.com/artifact/org.jboss.shrinkwrap.resolver/shrinkwrap-resolver-depchain -->
+    <dependency>
+      <groupId>org.jboss.shrinkwrap.resolver</groupId>
+      <artifactId>shrinkwrap-resolver-depchain</artifactId>
+      <version>3.2.1</version>
     </dependency>
 
   </dependencies>

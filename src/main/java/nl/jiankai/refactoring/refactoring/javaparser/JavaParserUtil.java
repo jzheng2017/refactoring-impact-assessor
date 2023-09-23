@@ -9,21 +9,33 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Objects;
-
-import static nl.jiankai.refactoring.refactoring.RefactoringType.METHOD_NAME;
-import static nl.jiankai.refactoring.refactoring.RefactoringType.METHOD_SIGNATURE;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class JavaParserUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(JavaParserUtil.class);
-    public static List<MethodCallExpr> getMethodUsages(CompilationUnit compilationUnit, String qualifiedName) {
-        return compilationUnit.findAll(MethodCallExpr.class, methodCall -> {
+
+    public static List<MethodCallExpr> getMethodUsages(CompilationUnit compilationUnit, String qualifiedName, String methodName) {
+
+        AtomicLong failedResolves = new AtomicLong();
+        AtomicLong totalResolveAttempts = new AtomicLong();
+        List<MethodCallExpr> methodsUsages = compilationUnit.findAll(MethodCallExpr.class, methodCall -> {
             try {
-                return Objects.equals(qualifiedName, methodCall.resolve().getQualifiedSignature());
+                if (Objects.equals(methodCall.getNameAsString(), methodName)) {
+                    totalResolveAttempts.getAndIncrement();
+                    return Objects.equals(qualifiedName, methodCall.resolve().getQualifiedSignature());
+                }
+                return false;
             } catch (Exception ex) {
-                LOGGER.warn("Something went wrong while computing method usages", ex);
+                failedResolves.getAndIncrement();
                 return false;
             }
         });
+
+        if (failedResolves.get() > 0) {
+            LOGGER.warn("{} out of {} methods that matched the pattern {} could not be resolved correctly", failedResolves.get(), totalResolveAttempts, qualifiedName);
+        }
+
+        return methodsUsages;
     }
 
     public static boolean isBreakingChange(MethodCallExpr methodCallExpr, RefactoringData refactoringData) {

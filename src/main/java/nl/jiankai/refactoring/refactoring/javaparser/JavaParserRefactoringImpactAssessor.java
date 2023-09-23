@@ -15,6 +15,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeS
 import com.github.javaparser.utils.ParserCollectionStrategy;
 import com.github.javaparser.utils.ProjectRoot;
 import nl.jiankai.refactoring.project.CompositeProjectFactory;
+import nl.jiankai.refactoring.project.Project;
 import nl.jiankai.refactoring.project.dependencymanagement.ProjectData;
 import nl.jiankai.refactoring.refactoring.*;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
     private static final Logger LOGGER = LoggerFactory.getLogger(JavaParserRefactoringImpactAssessor.class);
     private Set<RefactoringType> supportedRefactoringTypes = Set.of(RefactoringType.METHOD_SIGNATURE, RefactoringType.METHOD_NAME);
     private ProjectsToScan projectsToScan;
+
     public JavaParserRefactoringImpactAssessor() {
         projectsToScan = new ProjectsToScan();
     }
@@ -46,8 +48,16 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
         Map<ProjectData, Collection<CompilationUnit>> projects = getAllProjects();
         Map<ProjectData, List<RefactoringImpact>> impacts = projects
                 .entrySet()
-                .stream()
-                .collect(toMap(Map.Entry::getKey, entry -> entry.getValue().stream().flatMap(cu -> collectRefactoringImpact(cu, refactoringData)).toList()));
+                .parallelStream()
+                .collect(
+                        toMap(
+                                Map.Entry::getKey,
+                                entry -> entry
+                                        .getValue()
+                                        .stream()
+                                        .flatMap(cu -> collectRefactoringImpact(cu, refactoringData))
+                                        .toList()
+                        ));
 
         return new ImpactAssessment(impacts, RefactoringStatisticsGenerator.compute(impacts));
     }
@@ -62,24 +72,28 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
     }
 
     private Stream<RefactoringImpact> collectRefactoringImpact(CompilationUnit compilationUnit, RefactoringData refactoringData) {
-        return JavaParserUtil
-                .getMethodUsages(compilationUnit, refactoringData.fullyQualifiedSignature())
-                .stream()
-                .map(method -> {
-                    Range range = method.getRange().orElse(Range.range(0, 0, 0, 0));
-                    String filePath = "";
-                    String fileName = "";
-                    if (compilationUnit.getStorage().isPresent()) {
-                        CompilationUnit.Storage storage = compilationUnit.getStorage().get();
-                        filePath = storage.getPath().toAbsolutePath().toString();
-                        fileName = storage.getFileName();
-                    }
+        if (isMethodRefactoringType(refactoringData.refactoringType())) {
+            return JavaParserUtil
+                    .getMethodUsages(compilationUnit, refactoringData.fullyQualifiedSignature(), refactoringData.elementName())
+                    .stream()
+                    .map(method -> {
+                        Range range = method.getRange().orElse(Range.range(0, 0, 0, 0));
+                        String filePath = "";
+                        String fileName = "";
+                        if (compilationUnit.getStorage().isPresent()) {
+                            CompilationUnit.Storage storage = compilationUnit.getStorage().get();
+                            filePath = storage.getPath().toAbsolutePath().toString();
+                            fileName = storage.getFileName();
+                        }
 
-                    return new RefactoringImpact(
-                            filePath, fileName, getPackageName(method), getClassName(method), method.getNameAsString(),
-                            new RefactoringImpact.Position(range.begin.column, range.end.column, range.begin.line, range.end.line),
-                            JavaParserUtil.isBreakingChange(method, refactoringData));
-                });
+                        return new RefactoringImpact(
+                                filePath, fileName, getPackageName(method), getClassName(method), method.getNameAsString(),
+                                new RefactoringImpact.Position(range.begin.column, range.end.column, range.begin.line, range.end.line),
+                                JavaParserUtil.isBreakingChange(method, refactoringData));
+                    });
+        } else {
+            throw new UnsupportedOperationException("Refactoring type '%s' is not supported yet".formatted(refactoringData.refactoringType()));
+        }
     }
 
     private String getPackageName(Node node) {
@@ -108,14 +122,15 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
         return projectsToScan
                 .projects()
                 .stream()
-                .collect(toMap(nl.jiankai.refactoring.project.Project::getProjectVersion, project -> getProject(project)));
+                .collect(toMap(nl.jiankai.refactoring.project.Project::getProjectVersion, this::getProject));
     }
 
     private Collection<CompilationUnit> getProject(File pathToProject) {
         return getProject(new CompositeProjectFactory().createProject(pathToProject));
     }
 
-    private Collection<CompilationUnit> getProject(nl.jiankai.refactoring.project.Project project) {
+    private Collection<CompilationUnit> getProject(Project project) {
+        project.install();
         Collection<File> jarLocations = project.jars();
         File projectPath = project.getLocalPath();
         List<File> allSourceDirectories = collectAllSourceDirectories(projectPath);
@@ -167,5 +182,12 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
 
         }
         return sourceDirs;
+    }
+
+    private boolean isMethodRefactoringType(RefactoringType refactoringType) {
+        return switch (refactoringType) {
+            case METHOD_NAME, METHOD_SIGNATURE -> true;
+            case UNKNOWN -> false;
+        };
     }
 }

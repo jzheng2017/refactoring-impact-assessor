@@ -5,16 +5,17 @@ import nl.jiankai.refactoring.util.FileUtil;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
-import org.apache.maven.model.Model;
-import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.shared.invoker.*;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+import org.jboss.shrinkwrap.resolver.api.maven.Maven;
+import org.jboss.shrinkwrap.resolver.api.maven.MavenStrategyStage;
+import org.jboss.shrinkwrap.resolver.api.maven.MavenWorkingSession;
+import org.jboss.shrinkwrap.resolver.api.maven.coordinate.MavenDependency;
+import org.jboss.shrinkwrap.resolver.api.maven.pom.ParsedPomFile;
+import org.jboss.shrinkwrap.resolver.impl.maven.MavenWorkingSessionContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -24,18 +25,22 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
 
     @Override
     public Collection<Dependency> resolve(File projectRootPath) {
-        try {
-            Model model = parsePomFile(projectRootPath);
-            Properties properties = model.getProperties();
-            return model
-                    .getDependencies()
-                    .stream()
-                    .map(dependency -> new Dependency(dependency.getGroupId(), dependency.getArtifactId(), resolveProperty(properties, dependency.getVersion())))
-                    .toList();
-        } catch (FileUtil.FileNotFoundException | IOException | XmlPullParserException e) {
-            LOGGER.warn("Could not resolve project dependencies for project path '{}'", projectRootPath, e);
-            return new ArrayList<>();
-        }
+        MavenStrategyStage resolve =
+                Maven.configureResolver()
+                        .loadPomFromFile(FileUtil.findPomFile(projectRootPath))
+                        .importCompileAndRuntimeDependencies()
+                        .importRuntimeAndTestDependencies()
+                        .resolve();
+        MavenWorkingSession mavenWorkingSession = ((MavenWorkingSessionContainer) resolve).getMavenWorkingSession();
+
+        List<MavenDependency> dependencies = new ArrayList<>();
+        dependencies.addAll(mavenWorkingSession.getDependenciesForResolution());
+        dependencies.addAll(mavenWorkingSession.getDependencyManagement());
+
+        return dependencies
+                .stream()
+                .map(dependency -> new Dependency(dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion()))
+                .toList();
     }
 
     @Override
@@ -78,19 +83,14 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
 
     @Override
     public ProjectData getProjectVersion(File projectRootPath) {
-        try {
-            Model pom = parsePomFile(projectRootPath);
-            return new ProjectData(pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), projectRootPath);
-        } catch (IOException | XmlPullParserException e) {
-            LOGGER.warn("Could not get project version. Reason {}", e.getMessage(), e);
-            throw new ProjectResolveException(e.getMessage(), e);
-        }
-    }
-
-    private Model parsePomFile(File projectRootPath) throws IOException, XmlPullParserException {
-        File file = FileUtil.findPomFile(projectRootPath);
-        MavenXpp3Reader reader = new MavenXpp3Reader();
-        return reader.read(new FileReader(file));
+        MavenStrategyStage resolve =
+                Maven.configureResolver()
+                        .loadPomFromFile(FileUtil.findPomFile(projectRootPath))
+                        .resolve();
+        MavenWorkingSession mavenWorkingSession =
+                ((MavenWorkingSessionContainer) resolve).getMavenWorkingSession();
+        ParsedPomFile pom = mavenWorkingSession.getParsedPomFile();
+        return new ProjectData(pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), projectRootPath);
     }
 
     private boolean dependenciesAlreadySatisfied(File projectRootPath) {
@@ -120,14 +120,6 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
 
     private String createJarName(Dependency dependency) {
         return dependency.artifactId() + "-" + dependency.version() + ".jar";
-    }
-
-    private String resolveProperty(Properties properties, String property) {
-        if (property.startsWith("${") && property.endsWith("}")) {
-            return (String)properties.getOrDefault(property.substring(2, property.length() - 1), property);
-        }
-
-        return property;
     }
 
     private File getMavenRepositoryLocation() {

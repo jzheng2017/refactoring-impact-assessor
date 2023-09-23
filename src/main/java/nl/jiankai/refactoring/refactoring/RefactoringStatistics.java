@@ -28,6 +28,7 @@ public record RefactoringStatistics(Map<ProjectData, Integer> projectsWithMostIm
         }
 
         view
+                .append("\n=================================\n")
                 .append("Top %s files with most impacts".formatted(mostImpactLimit))
                 .append("\n=================================\n");
 
@@ -39,9 +40,8 @@ public record RefactoringStatistics(Map<ProjectData, Integer> projectsWithMostIm
                     .append("\n");
         }
 
-        view.append("\n=================================\n");
-
         view
+                .append("\n=================================\n")
                 .append("%s projects out of %s impacted".formatted(projectsImpacted, projectsWithMostImpact.size()))
                 .append("\n=================================\n");
 
