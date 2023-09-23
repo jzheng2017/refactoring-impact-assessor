@@ -64,7 +64,7 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
     }
 
     private boolean shouldCache(ProjectData project) {
-        return !project.version().endsWith("-SNAPSHOT");
+        return !project.coordinate().version().endsWith("-SNAPSHOT");
     }
 
     private void cacheIfNeeded(ProjectData project, RefactoringData refactoringData, List<RefactoringImpact> refactoringImpacts) {

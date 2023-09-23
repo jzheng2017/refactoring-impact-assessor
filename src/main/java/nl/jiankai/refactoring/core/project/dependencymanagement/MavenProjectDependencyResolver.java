@@ -33,14 +33,14 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
                         .resolve();
         MavenWorkingSession mavenWorkingSession = ((MavenWorkingSessionContainer) resolve).getMavenWorkingSession();
 
-        List<MavenDependency> dependencies = new ArrayList<>();
+        Set<MavenDependency> dependencies = new HashSet<>();
         dependencies.addAll(mavenWorkingSession.getDependenciesForResolution());
         dependencies.addAll(mavenWorkingSession.getDependencyManagement());
 
         return dependencies
                 .stream()
                 .map(dependency -> new Dependency(dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion()))
-                .toList();
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -48,14 +48,14 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
         return findProjectDependencyJars(projectRootPath, resolve(projectRootPath));
     }
 
-    private List<File> findProjectDependencyJars(File projectRootPath, Collection<Dependency> projectDependencies) {
+    private Collection<File> findProjectDependencyJars(File projectRootPath, Collection<Dependency> projectDependencies) {
         File repositoryLocation = getMavenRepositoryLocation();
         Set<Dependency> dependencies = new HashSet<>(projectDependencies);
         Set<String> fileNames = dependencies.stream().map(this::createJarName).collect(Collectors.toSet());
 
-        List<File> foundJars = findJarsRecursive(repositoryLocation, fileNames).toList();
+        Set<File> foundJars = findJarsRecursive(repositoryLocation, fileNames).collect(Collectors.toSet());
         if (foundJars.size() != dependencies.size()) {
-            List<String> jarsNotFound = getMissingJars(fileNames, foundJars.stream().map(File::getName).collect(Collectors.toSet()));
+            Set<String> jarsNotFound = getMissingJars(fileNames, foundJars.stream().map(File::getName).collect(Collectors.toSet()));
             LOGGER.warn("[{}] Not all jars were found. {} jars were found of the {} dependencies", projectRootPath.getAbsolutePath(), foundJars.size(), dependencies.size());
             LOGGER.warn("[{}] The following jars are missing: {}", projectRootPath.getAbsolutePath(), jarsNotFound);
         }
@@ -90,7 +90,7 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
         MavenWorkingSession mavenWorkingSession =
                 ((MavenWorkingSessionContainer) resolve).getMavenWorkingSession();
         ParsedPomFile pom = mavenWorkingSession.getParsedPomFile();
-        return new ProjectData(pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), projectRootPath);
+        return new ProjectData(new ProjectCoordinate(pom.getGroupId(), pom.getArtifactId(), pom.getVersion()), projectRootPath);
     }
 
     private boolean dependenciesAlreadySatisfied(File projectRootPath) {
@@ -99,8 +99,8 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
         return projectDependencies.size() == findProjectDependencyJars(projectRootPath, projectDependencies).size();
     }
 
-    private List<String> getMissingJars(Set<String> fileNames, Set<String> foundJars) {
-        List<String> missingJars = new ArrayList<>();
+    private Set<String> getMissingJars(Set<String> fileNames, Set<String> foundJars) {
+        Set<String> missingJars = new HashSet<>();
 
         for (String fileName : fileNames) {
             if (!foundJars.contains(fileName)) {

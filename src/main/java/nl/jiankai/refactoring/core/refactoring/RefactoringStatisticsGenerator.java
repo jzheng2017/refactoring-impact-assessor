@@ -14,7 +14,11 @@ public class RefactoringStatisticsGenerator {
     }
 
     private static long computeTotalProjectsImpacted(Map<ProjectData, List<RefactoringImpact>> projectImpactInfo) {
-        return projectImpactInfo.values().stream().filter(Predicate.not(List::isEmpty)).count();
+        return projectImpactInfo
+                .values()
+                .stream()
+                .filter(Predicate.not(List::isEmpty))
+                .count();
     }
 
     private static List<RefactoringStatistics.Ranking> computeProjectsWithMostImpact(Map<ProjectData, List<RefactoringImpact>> projectImpactInfo) {

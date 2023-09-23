@@ -1,29 +1,17 @@
 package nl.jiankai.refactoring.core.refactoring.javaparser;
 
-import com.github.javaparser.ParseResult;
-import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.Range;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
-import com.github.javaparser.symbolsolver.JavaSymbolSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
-import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
-import com.github.javaparser.utils.ParserCollectionStrategy;
-import com.github.javaparser.utils.ProjectRoot;
-import nl.jiankai.refactoring.core.project.CompositeProjectFactory;
+import nl.jiankai.refactoring.util.JavaParserUtil;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
 import nl.jiankai.refactoring.core.refactoring.*;
-import nl.jiankai.refactoring.refactoring.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -66,10 +54,17 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
     @Override
     public List<RefactoringImpact> assesImpact(ProjectData projectData, RefactoringData refactoringData) {
         LOGGER.info("Computing refactoring impact for project {}", projectData);
-        return getProject(projectData.pathToProject())
+        return JavaParserUtil.getProject(projectData.pathToProject())
                 .stream()
                 .flatMap(compilationUnit -> collectRefactoringImpact(compilationUnit, refactoringData))
                 .toList();
+    }
+
+    private Map<ProjectData, Collection<CompilationUnit>> getAllProjects() {
+        return projectsToScan
+                .projects()
+                .stream()
+                .collect(toMap(Project::getProjectVersion, JavaParserUtil::getProject));
     }
 
     private Stream<RefactoringImpact> collectRefactoringImpact(CompilationUnit compilationUnit, RefactoringData refactoringData) {
@@ -119,71 +114,6 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
         return "";
     }
 
-    private Map<ProjectData, Collection<CompilationUnit>> getAllProjects() {
-        return projectsToScan
-                .projects()
-                .stream()
-                .collect(toMap(Project::getProjectVersion, this::getProject));
-    }
-
-    private Collection<CompilationUnit> getProject(File pathToProject) {
-        return getProject(new CompositeProjectFactory().createProject(pathToProject));
-    }
-
-    private Collection<CompilationUnit> getProject(Project project) {
-        project.install();
-        Collection<File> jarLocations = project.jars();
-        File projectPath = project.getLocalPath();
-        List<File> allSourceDirectories = collectAllSourceDirectories(projectPath);
-        try {
-            CombinedTypeSolver typeSolver = new CombinedTypeSolver(new ReflectionTypeSolver());
-
-            for (File sourceDir : allSourceDirectories) {
-                typeSolver.add(new JavaParserTypeSolver(sourceDir));
-            }
-
-            for (File jar : jarLocations) {
-                typeSolver.add(new JarTypeSolver(jar.getAbsolutePath()));
-            }
-
-            ProjectRoot projectRoot = new ParserCollectionStrategy(new ParserConfiguration().setSymbolResolver(new JavaSymbolSolver(typeSolver))).collect(projectPath.toPath());
-
-            return projectRoot
-                    .getSourceRoots()
-                    .stream()
-                    .flatMap(
-                            sourceRoot -> {
-                                try {
-                                    return sourceRoot.tryToParse().stream();
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            })
-                    .filter(ParseResult::isSuccessful)
-                    .map(parseResult -> parseResult.getResult().get())
-                    .toList();
-        } catch (Exception ex) {
-            LOGGER.warn("Parsing project '{}' went wrong. Reason: {}", projectPath, ex.getMessage(), ex);
-        }
-
-        return new ArrayList<>();
-    }
-
-    private List<File> collectAllSourceDirectories(File root) {
-        List<File> sourceDirs = new ArrayList<>();
-
-        File[] files = root.listFiles();
-        if (files != null) {
-            for (File child : files) {
-                if (child.isDirectory() && child.getPath().endsWith("/src/main/java")) {
-                    sourceDirs.add(child);
-                }
-                sourceDirs.addAll(collectAllSourceDirectories(child));
-            }
-
-        }
-        return sourceDirs;
-    }
 
     private boolean isMethodRefactoringType(RefactoringType refactoringType) {
         return switch (refactoringType) {

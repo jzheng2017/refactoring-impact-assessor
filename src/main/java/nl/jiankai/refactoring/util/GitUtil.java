@@ -1,5 +1,8 @@
-package nl.jiankai.refactoring.core.project.git;
+package nl.jiankai.refactoring.util;
 
+import nl.jiankai.refactoring.core.project.git.GitOperationException;
+import nl.jiankai.refactoring.core.project.git.GitRepository;
+import nl.jiankai.refactoring.core.project.git.JGitRepositoryFactory;
 import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
