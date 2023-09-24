@@ -22,11 +22,14 @@ public class RefactoringStatisticsGenerator {
     }
 
     private static List<RefactoringStatistics.Ranking> computeProjectsWithMostImpact(Map<ProjectData, List<RefactoringImpact>> projectImpactInfo) {
-        List<RefactoringStatistics.Ranking> projects = projectImpactInfo.entrySet().stream().map(entry -> new RefactoringStatistics.Ranking(entry.getKey().toString(), entry.getValue().size())).collect(Collectors.toList());
 
-        projects.sort(Comparator.comparingInt(RefactoringStatistics.Ranking::value).reversed());
 
-        return projects;
+        return projectImpactInfo
+                .entrySet()
+                .stream()
+                .map(entry -> new RefactoringStatistics.Ranking(entry.getKey().toString(), entry.getValue().size()))
+                .sorted(Comparator.comparingInt(RefactoringStatistics.Ranking::value).reversed())
+                .collect(Collectors.toList());
     }
 
     private static List<RefactoringStatistics.Ranking> computeMostImpactedFiles(List<RefactoringImpact> refactoringImpacts) {
@@ -34,17 +37,15 @@ public class RefactoringStatisticsGenerator {
 
         for (RefactoringImpact refactoringImpact : refactoringImpacts) {
             String filePath = refactoringImpact.filePath();
-            if (files.containsKey(filePath)) {
-                files.put(filePath, files.get(filePath) + 1);
-            } else {
-                files.put(filePath, 1);
-            }
+            files.merge(filePath, 1, Integer::sum);
         }
 
-        List<RefactoringStatistics.Ranking> filesList = files.entrySet().stream().map(entry -> new RefactoringStatistics.Ranking(entry.getKey(), entry.getValue())).collect(Collectors.toList());
 
-        filesList.sort(Comparator.comparingInt(RefactoringStatistics.Ranking::value).reversed());
-
-        return filesList;
+        return files
+                .entrySet()
+                .stream()
+                .map(entry -> new RefactoringStatistics.Ranking(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparingInt(RefactoringStatistics.Ranking::value).reversed())
+                .collect(Collectors.toList());
     }
 }

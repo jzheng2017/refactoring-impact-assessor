@@ -15,24 +15,29 @@ import java.net.URISyntaxException;
 
 public class GitUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(GitUtil.class);
+
     public static boolean validGitRepository(String url) {
         try {
             return new URIish(url).isRemote();
         } catch (URISyntaxException e) {
             LOGGER.warn("Invalid url: {}", url);
-            return false;
+            throw new GitOperationException("Invalid url: %s".formatted(url), e);
         }
     }
 
     public static GitRepository clone(String url, File repositoryDirectory) {
-        CloneCommand cloneCommand = new CloneCommand();
-        cloneCommand.setURI(url);
-        cloneCommand.setDirectory(repositoryDirectory);
-        try (Git git = cloneCommand.call()){
-            return new JGitRepositoryFactory().createProject(repositoryDirectory);
-        } catch (GitAPIException e) {
-            LOGGER.warn("Could not clone the git repository: {}", e.getMessage());
-            throw new GitOperationException("Could not clone the git repository", e);
+        if (validGitRepository(url)) {
+            CloneCommand cloneCommand = new CloneCommand();
+            cloneCommand.setURI(url);
+            cloneCommand.setDirectory(repositoryDirectory);
+            try (Git git = cloneCommand.call()) {
+                return new JGitRepositoryFactory().createProject(repositoryDirectory);
+            } catch (GitAPIException e) {
+                LOGGER.warn("Could not clone the git repository: {}", e.getMessage());
+                throw new GitOperationException("Could not clone the git repository", e);
+            }
+        } else {
+            throw new GitOperationException("Could not clone the git repository with url '%s'".formatted(url));
         }
     }
 }

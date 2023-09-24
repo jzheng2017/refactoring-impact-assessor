@@ -7,11 +7,14 @@ import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
 
 import java.io.File;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.Objects;
 
 public class MavenProject implements Project {
     private final File projectRootPath;
+    private String hash;
     private final MavenProjectDependencyResolver dependencyResolver = new MavenProjectDependencyResolver();
 
     public MavenProject(File projectRootPath) {

@@ -36,9 +36,7 @@ public class JavaParserProjectQuery implements ProjectQuery {
                     try {
                         ResolvedMethodDeclaration methodDeclaration = m.resolve();
                         String fullyQualifiedSignature = methodDeclaration.getQualifiedSignature();
-                        if (methodUsages.containsKey(fullyQualifiedSignature)) {
-                            methodUsages.put(fullyQualifiedSignature, methodUsages.get(fullyQualifiedSignature) + 1);
-                        }
+                        methodUsages.merge(fullyQualifiedSignature, 1L, Long::sum);
                     } catch (Exception e) {
                         LOGGER.debug("Could not resolve method '{}'", m.getNameAsString(), e);
                     }
@@ -58,11 +56,11 @@ public class JavaParserProjectQuery implements ProjectQuery {
                     }
                 })
                 .filter(Objects::nonNull)
-                .collect(Collectors.toMap(m -> {
+                .collect(Collectors.toConcurrentMap(m -> {
                     try {
                         return m.getQualifiedSignature();
                     } catch (Exception e) {
-                        return null;
+                        return "COULD NOT DETERMINE THE FULLY QUALIFIED SIGNATURE";
                     }
                 }, m -> 0L, (a, b) -> a));
     }
