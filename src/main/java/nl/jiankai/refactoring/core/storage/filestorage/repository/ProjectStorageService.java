@@ -125,4 +125,9 @@ public abstract class ProjectStorageService<T> implements EntityStorageService<P
     private void writeWithoutNotify(List<Project> list) {
         storageService.write(list.stream().map(this::target).toList());
     }
+
+    @Override
+    public boolean exists() {
+        return storageService.exists();
+    }
 }

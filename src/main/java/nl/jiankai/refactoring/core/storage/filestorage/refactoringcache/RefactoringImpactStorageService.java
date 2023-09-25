@@ -111,6 +111,11 @@ public class RefactoringImpactStorageService implements EntityStorageService<Pro
         }
     }
 
+    @Override
+    public boolean exists() {
+        return new File(applicationConfiguration.cacheDirectory()).exists();
+    }
+
     private String createFileLocation(String filename) {
         return applicationConfiguration.cacheDirectory() + File.separator + filename.hashCode();
     }

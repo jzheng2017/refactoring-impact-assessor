@@ -13,4 +13,6 @@ public interface CacheService<T extends Identifiable> {
     Optional<T> get(String identifier);
 
     void write(T entity);
+
+    void clear();
 }

@@ -38,4 +38,9 @@ public interface StorageService<T> extends StorageObservable<T> {
      * Empties the whole store by clearing all entries
      */
     void clear();
+
+    /**
+     * @return whether the data storage exists
+     */
+    boolean exists();
 }

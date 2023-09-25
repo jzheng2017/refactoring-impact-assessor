@@ -61,6 +61,11 @@ public class LocalFileStorageService implements StorageService<String> {
         write("", false);
     }
 
+    @Override
+    public boolean exists() {
+        return new File(fileLocation).exists();
+    }
+
     private void writeList(List<String> list, boolean append) {
         write(String.join(SEPARATOR, list), append);
     }
