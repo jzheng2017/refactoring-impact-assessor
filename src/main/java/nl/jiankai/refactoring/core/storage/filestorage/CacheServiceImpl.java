@@ -19,11 +19,12 @@ public class CacheServiceImpl<T extends Identifiable> implements CacheService<T>
     private final String baseLocation;
     private SerializationService serializationService;
     private Map<String, T> cache = new HashMap<>();
-    private Class<T> clazz;
+    private Class<T> entityClassType;
 
-    public CacheServiceImpl(String baseLocation, SerializationService serializationService) {
+    public CacheServiceImpl(String baseLocation, SerializationService serializationService, Class<T> entityClassType) {
         this.baseLocation = baseLocation;
         this.serializationService = serializationService;
+        this.entityClassType = entityClassType;
     }
 
     @Override
@@ -34,19 +35,23 @@ public class CacheServiceImpl<T extends Identifiable> implements CacheService<T>
     @Override
     public Optional<T> get(String identifier) {
         if (cache.containsKey(identifier)) {
+            LOGGER.info("'{}' is cached. Trying to fetch from cache..", identifier);
             return Optional.of(cache.get(identifier));
         } else {
+            LOGGER.info("'{}' is not cached in memory.. Trying to fetch from disk..", identifier);
             LocalFileStorageService fileStorageService = new LocalFileStorageService(createFileLocation(identifier), false);
             if (fileStorageService.exists()) {
+                LOGGER.info("'{}' found on the disk cache!", identifier);
                 return Optional.of(
                         serializationService.deserialize(
                                 fileStorageService.read().collect(Collectors.joining()).getBytes(),
-                                clazz
+                                entityClassType
                         )
                 );
             }
         }
 
+        LOGGER.info("'{}' could not be found in the memory or disk cache..", identifier);
         return Optional.empty();
     }
 
@@ -55,6 +60,7 @@ public class CacheServiceImpl<T extends Identifiable> implements CacheService<T>
         LocalFileStorageService fileStorageService = new LocalFileStorageService(createFileLocation(entity.getId()), true);
         fileStorageService.write(new String(serializationService.serialize(entity)));
         cache.put(entity.getId(), entity);
+        LOGGER.warn("Written entity '{}' to the cache", entity.getId());
     }
 
     @Override

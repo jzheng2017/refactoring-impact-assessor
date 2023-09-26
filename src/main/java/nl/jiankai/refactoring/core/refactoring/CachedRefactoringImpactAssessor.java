@@ -1,15 +1,17 @@
 package nl.jiankai.refactoring.core.refactoring;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import nl.jiankai.refactoring.configuration.ApplicationConfiguration;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.ProjectListener;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
+import nl.jiankai.refactoring.core.storage.api.CacheService;
+import nl.jiankai.refactoring.core.storage.api.Identifiable;
+import nl.jiankai.refactoring.core.storage.filestorage.CacheServiceImpl;
 import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
-import nl.jiankai.refactoring.core.storage.filestorage.refactoringcache.RefactoringImpactStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,9 +19,8 @@ import java.util.stream.Collectors;
 
 public class CachedRefactoringImpactAssessor implements RefactoringImpactAssessor, ProjectListener<Project> {
     private static final Logger LOGGER = LoggerFactory.getLogger(CachedRefactoringImpactAssessor.class);
-    private Map<RefactoringKey, List<RefactoringImpact>> refactoringImpactCache = new HashMap<>();
     private RefactoringImpactAssessor refactoringImpactAssessor;
-    private RefactoringImpactStorageService refactoringImpactStorageService;
+    private CacheService<RefactoringResult> refactoringCacheService;
     private ApplicationConfiguration applicationConfiguration;
     private ProjectsToScan projectsToScan;
 
@@ -28,9 +29,9 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
             throw new IllegalArgumentException("Can not inject '%s' into itself!".formatted(refactoringImpactAssessor.getClass()));
         }
         this.projectsToScan = new ProjectsToScan();
-        this.refactoringImpactStorageService = new RefactoringImpactStorageService(new JacksonSerializationService());
         this.refactoringImpactAssessor = refactoringImpactAssessor;
         this.applicationConfiguration = new ApplicationConfiguration();
+        this.refactoringCacheService = new CacheServiceImpl<>(applicationConfiguration.cacheDirectory(), new JacksonSerializationService(), RefactoringResult.class);
     }
 
     @Override
@@ -48,47 +49,26 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
     @Override
     public List<RefactoringImpact> assesImpact(ProjectData projectData, RefactoringData refactoringData) {
         final RefactoringKey refactoringKey = createRefactoringKey(projectData, refactoringData);
-        if (isCached(refactoringKey)) {
-            LOGGER.info("Project {} is cached. Trying to fetch from cache...", projectData);
-            return getFromCache(projectData, refactoringData).orElseGet(() -> {
+        if (eligibleForCache(projectData)) {
+            Optional<RefactoringResult> refactoringResult = refactoringCacheService.get(refactoringKey.toString());
+
+            return refactoringResult.orElseGet(() -> {
                 LOGGER.warn("Could not find project {} in the cache. The refactoring impact will be recomputed again.", projectData);
-                return computeRefactoringImpacts(projectData, refactoringData);
-            });
+                return new RefactoringResult(refactoringKey, computeRefactoringImpacts(projectData, refactoringData));
+            }).refactoringResults;
         } else {
             return computeRefactoringImpacts(projectData, refactoringData);
         }
     }
-
-    private boolean isCached(RefactoringKey key) {
-        return refactoringImpactCache.containsKey(key) || refactoringImpactStorageService.exists(key.toString());
-    }
-
-    private boolean shouldCache(ProjectData project) {
-        return !project.coordinate().version().endsWith("-SNAPSHOT");
+    private boolean eligibleForCache(ProjectData project) {
+//        return !project.coordinate().version().endsWith("-SNAPSHOT");
+        return true;
     }
 
     private void cacheIfNeeded(ProjectData project, RefactoringData refactoringData, List<RefactoringImpact> refactoringImpacts) {
-        if (shouldCache(project)) {
-            refactoringImpactCache.put(createRefactoringKey(project, refactoringData), refactoringImpacts);
-            refactoringImpactStorageService.write(new ProjectImpactInfo(project, refactoringData, refactoringImpacts));
+        if (eligibleForCache(project)) {
+            refactoringCacheService.write(new RefactoringResult(createRefactoringKey(project, refactoringData), refactoringImpacts));
         }
-    }
-
-    private Optional<List<RefactoringImpact>> getFromCache(ProjectData project, RefactoringData refactoringData) {
-        final RefactoringKey refactoringKey = createRefactoringKey(project, refactoringData);
-        Optional<List<RefactoringImpact>> refactoringImpacts =
-                Optional.ofNullable(
-                        Optional
-                                .ofNullable(refactoringImpactCache.get(refactoringKey)) // try in memory cache first
-                                .orElseGet(() -> { //if not in memory then try on disk
-                                    LOGGER.info("Refactoring results could not be found in the memory cache. Trying disk cache...");
-                                    Optional<ProjectImpactInfo> projectImpactInfo = refactoringImpactStorageService.read(refactoringKey.toString());
-                                    projectImpactInfo.ifPresent(p -> LOGGER.info("Refactoring results found on the disk cache!"));
-                                    return projectImpactInfo.orElse(new ProjectImpactInfo(project, refactoringData, null)).refactoringImpacts();
-                                }));
-
-        refactoringImpacts.ifPresent(p -> LOGGER.info("Found project {} in cache", project));
-        return refactoringImpacts;
     }
 
     private List<RefactoringImpact> computeRefactoringImpacts(ProjectData project, RefactoringData refactoringData) {
@@ -108,19 +88,29 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
     }
 
     private void clearCache() {
-        refactoringImpactCache.clear();
-        refactoringImpactStorageService.clear();
+        refactoringCacheService.clear();
     }
 
     private RefactoringKey createRefactoringKey(ProjectData project, RefactoringData refactoringData) {
         return new RefactoringKey(project, refactoringData.fullyQualifiedSignature(), refactoringData.refactoringType());
     }
 
-    private record RefactoringKey(ProjectData project, String fullyQualifiedSignature, RefactoringType refactoringType) {
+    private record RefactoringKey(ProjectData project, String fullyQualifiedSignature,
+                                  RefactoringType refactoringType) {
 
         @Override
         public String toString() {
             return project.toString() + "-" + fullyQualifiedSignature + "-" + refactoringType;
+        }
+    }
+
+    @JsonIgnoreProperties(value = {"id"})
+    private record RefactoringResult(RefactoringKey refactoringKey,
+                                     List<RefactoringImpact> refactoringResults) implements Identifiable {
+
+        @Override
+        public String getId() {
+            return refactoringKey.toString();
         }
     }
 }

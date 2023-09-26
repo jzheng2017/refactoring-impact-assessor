@@ -7,6 +7,11 @@ public class HashingUtil {
 
     public static String md5Hash(String plain) throws NoSuchAlgorithmException {
         MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        return new String(messageDigest.digest(plain.getBytes()));
+        byte[] digest = messageDigest.digest(plain.getBytes());
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }
