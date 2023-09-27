@@ -2,6 +2,7 @@ package nl.jiankai.refactoring.core.refactoring;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import nl.jiankai.refactoring.configuration.ApplicationConfiguration;
+import nl.jiankai.refactoring.configuration.CacheLocation;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.ProjectListener;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
@@ -12,6 +13,7 @@ import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,8 +32,7 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
         }
         this.projectsToScan = new ProjectsToScan();
         this.refactoringImpactAssessor = refactoringImpactAssessor;
-        this.applicationConfiguration = new ApplicationConfiguration();
-        this.refactoringCacheService = new CacheServiceImpl<>(applicationConfiguration.cacheDirectory(), new JacksonSerializationService(), RefactoringResult.class);
+        this.refactoringCacheService = new CacheServiceImpl<>(CacheLocation.REFACTORING_IMPACT, new JacksonSerializationService(), RefactoringResult.class);
     }
 
     @Override
@@ -50,14 +51,15 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
     public List<RefactoringImpact> assesImpact(ProjectData projectData, RefactoringData refactoringData) {
         final RefactoringKey refactoringKey = createRefactoringKey(projectData, refactoringData);
         if (eligibleForCache(projectData)) {
+            LOGGER.info("Trying to fetch '{}' from cache..", refactoringKey);
             Optional<RefactoringResult> refactoringResult = refactoringCacheService.get(refactoringKey.toString());
 
             return refactoringResult.orElseGet(() -> {
-                LOGGER.warn("Could not find project {} in the cache. The refactoring impact will be recomputed again.", projectData);
-                return new RefactoringResult(refactoringKey, computeRefactoringImpacts(projectData, refactoringData));
+                LOGGER.info("Could not find project {} in the cache. The refactoring impact will be recomputed again.", projectData);
+                return new RefactoringResult(refactoringKey, computeRefactoringImpactsAndTryCache(projectData, refactoringData));
             }).refactoringResults;
         } else {
-            return computeRefactoringImpacts(projectData, refactoringData);
+            return computeRefactoringImpactsAndTryCache(projectData, refactoringData);
         }
     }
     private boolean eligibleForCache(ProjectData project) {
@@ -71,7 +73,7 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
         }
     }
 
-    private List<RefactoringImpact> computeRefactoringImpacts(ProjectData project, RefactoringData refactoringData) {
+    private List<RefactoringImpact> computeRefactoringImpactsAndTryCache(ProjectData project, RefactoringData refactoringData) {
         List<RefactoringImpact> refactoringImpacts = refactoringImpactAssessor.assesImpact(project, refactoringData);
         cacheIfNeeded(project, refactoringData, refactoringImpacts);
         return refactoringImpacts;

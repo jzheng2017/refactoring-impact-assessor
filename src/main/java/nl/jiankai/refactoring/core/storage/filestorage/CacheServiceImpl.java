@@ -4,10 +4,12 @@ import nl.jiankai.refactoring.core.storage.api.CacheService;
 import nl.jiankai.refactoring.core.storage.api.Identifiable;
 import nl.jiankai.refactoring.serialisation.SerializationService;
 import nl.jiankai.refactoring.util.HashingUtil;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
@@ -65,10 +67,12 @@ public class CacheServiceImpl<T extends Identifiable> implements CacheService<T>
 
     @Override
     public void clear() {
-        if (new File(baseLocation).delete()) {
+        try {
+            cache.clear();
+            FileUtils.deleteDirectory(new File(baseLocation));
             LOGGER.info("Cache at location '{}' has been cleared", baseLocation);
-        } else {
-            LOGGER.warn("Could not clear cache as location '{}'", baseLocation);
+        } catch (IOException e) {
+            LOGGER.warn("Could not clear cache at location '{}'", baseLocation, e);
         }
     }
 

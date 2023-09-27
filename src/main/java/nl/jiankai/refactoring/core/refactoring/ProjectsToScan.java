@@ -20,8 +20,7 @@ public class ProjectsToScan implements StorageListener<Project> {
     private final ProjectStorageService<String> projectStorageService;
 
     public ProjectsToScan() {
-        ApplicationConfiguration applicationConfiguration = new ApplicationConfiguration();
-        projectStorageService = new FileProjectStorageService(new LocalFileStorageService(applicationConfiguration.applicationProjectsToScanLocation(), false));
+        projectStorageService = new FileProjectStorageService(new LocalFileStorageService(ApplicationConfiguration.applicationProjectsToScanLocation(), false));
         projectStorageService.addListener(this);
     }
 

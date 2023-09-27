@@ -1,20 +1,20 @@
 package nl.jiankai.refactoring.configuration;
 
 public class ApplicationConfiguration {
-    private final String applicationAssetsBaseDirectory = "/home/jiankai/Documents/ref-plugin";
+    private static final String applicationAssetsBaseDirectory = "/home/jiankai/Documents/ref-plugin";
 
-    public String applicationAssetsBaseDirectory() {
+    public static String applicationAssetsBaseDirectory() {
         return applicationAssetsBaseDirectory;
     }
 
-    public String applicationProjectsToScanLocation() {
+    public static String applicationProjectsToScanLocation() {
         return applicationAssetsBaseDirectory + "/projects.txt";
     }
 
-    public String applicationAllProjectsLocation() {
+    public static String applicationAllProjectsLocation() {
         return applicationAssetsBaseDirectory + "/projects";
     }
-    public String cacheDirectory() {
+    public static String cacheDirectory() {
         return applicationAssetsBaseDirectory + "/cache";
     }
 }

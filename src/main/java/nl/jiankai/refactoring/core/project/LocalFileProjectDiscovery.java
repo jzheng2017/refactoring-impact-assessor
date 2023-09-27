@@ -17,11 +17,9 @@ import java.util.stream.Stream;
 public final class LocalFileProjectDiscovery implements ProjectDiscovery {
     private static final Logger LOGGER = LoggerFactory.getLogger(LocalFileProjectDiscovery.class);
     private ScheduledTaskExecutorService<Stream<Project>> executorService = new ScheduledTaskExecutorService<>();
-    private ApplicationConfiguration applicationConfiguration;
     private ProjectFactory projectFactory;
 
     public LocalFileProjectDiscovery() {
-        applicationConfiguration = new ApplicationConfiguration();
         projectFactory = new JGitRepositoryFactory();
     }
 
@@ -32,7 +30,7 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
             return executorService.executeTask(
                             ScheduledTask
                                     .builder((Class<Stream<Project>>)null)
-                                    .task(() -> this.scan(applicationConfiguration.applicationAllProjectsLocation()))
+                                    .task(() -> this.scan(ApplicationConfiguration.applicationAllProjectsLocation()))
                                     .build())
                     .get();
         } catch (InterruptedException | ExecutionException e) {
@@ -56,7 +54,7 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
     }
 
     private void createProjectDirectoryIfMissing() {
-        File projectDirectory = new File(applicationConfiguration.applicationAllProjectsLocation());
+        File projectDirectory = new File(ApplicationConfiguration.applicationAllProjectsLocation());
 
         if (!projectDirectory.exists()) {
             String projectPath = projectDirectory.getAbsolutePath();
