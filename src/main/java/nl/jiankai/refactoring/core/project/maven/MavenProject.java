@@ -14,7 +14,6 @@ import java.util.Objects;
 
 public class MavenProject implements Project {
     private final File projectRootPath;
-    private String hash;
     private final MavenProjectDependencyResolver dependencyResolver = new MavenProjectDependencyResolver();
 
     public MavenProject(File projectRootPath) {
