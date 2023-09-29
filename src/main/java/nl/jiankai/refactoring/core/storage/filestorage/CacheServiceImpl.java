@@ -62,7 +62,7 @@ public class CacheServiceImpl<T extends Identifiable> implements CacheService<T>
         LocalFileStorageService fileStorageService = new LocalFileStorageService(createFileLocation(entity.getId()), true);
         fileStorageService.write(new String(serializationService.serialize(entity)));
         cache.put(entity.getId(), entity);
-        LOGGER.warn("Written entity '{}' to the cache", entity.getId());
+        LOGGER.info("Written entity '{}' to the cache", entity.getId());
     }
 
     @Override
