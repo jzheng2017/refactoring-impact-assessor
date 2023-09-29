@@ -67,7 +67,9 @@ public class JavaParserProjectQuery implements ProjectQuery {
                     try {
                         ResolvedMethodDeclaration methodDeclaration = m.resolve();
                         String fullyQualifiedSignature = methodDeclaration.getQualifiedSignature();
-                        methodUsages.merge(fullyQualifiedSignature, 1L, Long::sum);
+                        if (methodUsages.containsKey(fullyQualifiedSignature)) {
+                            methodUsages.merge(fullyQualifiedSignature, 1L, Long::sum);
+                        }
                     } catch (Exception e) {
                         LOGGER.debug("Could not resolve method '{}'", m.getNameAsString(), e);
                         methodUsages.merge(null, 1L, Long::sum);
