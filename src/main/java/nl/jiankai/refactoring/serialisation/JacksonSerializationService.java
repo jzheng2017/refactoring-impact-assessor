@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
 
 public class JacksonSerializationService implements SerializationService {
     private static final Logger LOGGER = LoggerFactory.getLogger(JacksonSerializationService.class);
@@ -25,6 +26,16 @@ public class JacksonSerializationService implements SerializationService {
             return objectMapper.readValue(object, deserializedClass);
         } catch (IOException e) {
             LOGGER.warn("Could not deserialize object to {}", deserializedClass, e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public Map<String, Object> read(byte[] object) {
+        try {
+            return objectMapper.readValue(object, Map.class);
+        } catch (IOException e) {
+            LOGGER.warn("Could not read provided object to map");
             throw new RuntimeException(e);
         }
     }

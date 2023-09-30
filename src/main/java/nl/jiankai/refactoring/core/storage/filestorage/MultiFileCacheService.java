@@ -16,14 +16,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class CacheServiceImpl<T extends Identifiable> implements CacheService<T> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CacheServiceImpl.class);
+public class MultiFileCacheService<T extends Identifiable> implements CacheService<T> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MultiFileCacheService.class);
     private final String baseLocation;
     private SerializationService serializationService;
     private Map<String, T> cache = new HashMap<>();
     private Class<T> entityClassType;
 
-    public CacheServiceImpl(String baseLocation, SerializationService serializationService, Class<T> entityClassType) {
+    public MultiFileCacheService(String baseLocation, SerializationService serializationService, Class<T> entityClassType) {
         this.baseLocation = baseLocation;
         this.serializationService = serializationService;
         this.entityClassType = entityClassType;
@@ -60,8 +60,8 @@ public class CacheServiceImpl<T extends Identifiable> implements CacheService<T>
     @Override
     public void write(T entity) {
         LocalFileStorageService fileStorageService = new LocalFileStorageService(createFileLocation(entity.getId()), true);
-        fileStorageService.write(new String(serializationService.serialize(entity)));
         cache.put(entity.getId(), entity);
+        fileStorageService.write(new String(serializationService.serialize(entity)));
         LOGGER.info("Written entity '{}' to the cache", entity.getId());
     }
 

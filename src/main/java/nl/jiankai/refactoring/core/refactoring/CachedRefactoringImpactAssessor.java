@@ -8,12 +8,11 @@ import nl.jiankai.refactoring.core.project.ProjectListener;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
 import nl.jiankai.refactoring.core.storage.api.CacheService;
 import nl.jiankai.refactoring.core.storage.api.Identifiable;
-import nl.jiankai.refactoring.core.storage.filestorage.CacheServiceImpl;
+import nl.jiankai.refactoring.core.storage.filestorage.MultiFileCacheService;
 import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,7 +31,7 @@ public class CachedRefactoringImpactAssessor implements RefactoringImpactAssesso
         }
         this.projectsToScan = new ProjectsToScan();
         this.refactoringImpactAssessor = refactoringImpactAssessor;
-        this.refactoringCacheService = new CacheServiceImpl<>(CacheLocation.REFACTORING_IMPACT, new JacksonSerializationService(), RefactoringResult.class);
+        this.refactoringCacheService = new MultiFileCacheService<>(CacheLocation.REFACTORING_IMPACT, new JacksonSerializationService(), RefactoringResult.class);
     }
 
     @Override

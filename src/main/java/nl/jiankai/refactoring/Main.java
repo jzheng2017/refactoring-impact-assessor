@@ -9,6 +9,9 @@ import nl.jiankai.refactoring.core.project.git.JGitRepositoryFactory;
 import nl.jiankai.refactoring.core.project.query.JavaParserProjectQuery;
 import nl.jiankai.refactoring.core.project.query.MethodUsages;
 import nl.jiankai.refactoring.core.project.query.ProjectQuery;
+import nl.jiankai.refactoring.core.project.repository.Artifact;
+import nl.jiankai.refactoring.core.project.repository.ArtifactRepository;
+import nl.jiankai.refactoring.core.project.repository.maven.MavenCentralRepository;
 import nl.jiankai.refactoring.core.refactoring.*;
 import nl.jiankai.refactoring.core.refactoring.javaparser.JavaParserRefactoringImpactAssessor;
 import nl.jiankai.refactoring.core.refactoring.refactoringminer.RefactoringMinerRefactoringDetector;
@@ -55,13 +58,9 @@ public class Main {
 //        Collection<Refactoring> refactorings = refactoringDetector.detectRefactoringBetweenCommit(gitRepository, "59b6954", "606b568", Set.of(RefactoringType.METHOD_NAME, RefactoringType.METHOD_SIGNATURE));
 //        refactorings.forEach(System.out::println);
 
-        try {
-            Document document = Jsoup.connect("https://central.sonatype.com/artifact/ca.uhn.hapi.fhir/hapi-fhir-server-mdm/6.8.3").get();
-            String githubLink = document.getElementsByAttributeValue("data-test", "scm-url").get(0).attr("href");
-            JGitRepository jGitRepository = new JGitRepositoryFactory().createProject(githubLink, new File(baseLocation + "/wow"));
-            System.out.println(jGitRepository.getProjectVersion());
-        } catch (IOException e) {
-            System.out.println(e);
-        }
+
+        ArtifactRepository artifactRepository = new MavenCentralRepository();
+        List<Artifact> artifacts = artifactRepository.getArtifactUsages(new Artifact.Coordinate("org.apache.commons", "commons-compress", "1.24.0"));
+        System.out.println(artifacts);
     }
 }

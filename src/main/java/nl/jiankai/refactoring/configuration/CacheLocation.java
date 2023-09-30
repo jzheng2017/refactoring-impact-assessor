@@ -7,4 +7,5 @@ public class CacheLocation {
     public static final String REFACTORING_IMPACT = cacheBaseLocation + "refactoring-impact";
     public static final String PUBLIC_METHODS = cacheBaseLocation + "public-methods";
     public static final String METHOD_CALLS = cacheBaseLocation + "method-calls";
+    public static final String ARTIFACTS = cacheBaseLocation + "artifacts";
 }

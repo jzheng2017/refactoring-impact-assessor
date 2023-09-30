@@ -7,7 +7,7 @@ import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectCoordinate;
 import nl.jiankai.refactoring.core.storage.api.CacheService;
 import nl.jiankai.refactoring.core.storage.api.Identifiable;
-import nl.jiankai.refactoring.core.storage.filestorage.CacheServiceImpl;
+import nl.jiankai.refactoring.core.storage.filestorage.MultiFileCacheService;
 import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
 import nl.jiankai.refactoring.util.JavaParserUtil;
 import org.slf4j.Logger;
@@ -18,8 +18,8 @@ import java.util.stream.Collectors;
 
 public class JavaParserProjectQuery implements ProjectQuery {
     private static final Logger LOGGER = LoggerFactory.getLogger(JavaParserProjectQuery.class);
-    private final CacheService<ProjectPublicMethodsResult> publicMethodsCacheService = new CacheServiceImpl<>(CacheLocation.PUBLIC_METHODS, new JacksonSerializationService(), ProjectPublicMethodsResult.class);
-    private final CacheService<ProjectMethodCallsResult> methodCallsCacheService = new CacheServiceImpl<>(CacheLocation.METHOD_CALLS, new JacksonSerializationService(), ProjectMethodCallsResult.class);
+    private final CacheService<ProjectPublicMethodsResult> publicMethodsCacheService = new MultiFileCacheService<>(CacheLocation.PUBLIC_METHODS, new JacksonSerializationService(), ProjectPublicMethodsResult.class);
+    private final CacheService<ProjectMethodCallsResult> methodCallsCacheService = new MultiFileCacheService<>(CacheLocation.METHOD_CALLS, new JacksonSerializationService(), ProjectMethodCallsResult.class);
 
     @Override
     public List<MethodUsages> mostUsedMethods(Project provider, Collection<Project> users) {
