@@ -9,6 +9,7 @@ import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
 import nl.jiankai.refactoring.serialisation.SerializationService;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,20 +33,26 @@ public class MavenCentralRepository implements ArtifactRepository {
     public Optional<Artifact> getArtifact(Artifact.Coordinate coordinate) {
         try {
             Document document = Jsoup.connect("https://central.sonatype.com/artifact/%s/%s/%s".formatted(coordinate.groupId(), coordinate.artifactId(), coordinate.version())).get();
-            String githubLink = document.getElementsByAttributeValue("data-test", "scm-url").get(0).attr("href");
+            Elements elements = document.getElementsByAttributeValue("data-test", "scm-url");
+            if (!elements.isEmpty()) {
+                String githubLink = elements.get(0).attr("href");
 
-            return Optional.of(new Artifact(coordinate, githubLink));
+                return Optional.of(new Artifact(coordinate, githubLink));
+            } else {
+                LOGGER.warn("Artifact {} has no source control link", coordinate);
+            }
         } catch (Exception e) {
             LOGGER.warn("Could not get the artifact information of '{}'", coordinate, e);
-            return Optional.empty();
         }
+
+        return Optional.empty();
     }
 
     @Override
-    public List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate) {
+    public List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions) {
         try {
             List<Artifact> artifacts = new ArrayList<>();
-            String body = post(coordinate);
+            String body = post(coordinate, pageOptions);
             Map<String, Object> usages = serializationService.read(body.getBytes());
             List<Map<String, String>> components = (List<Map<String, String>>) usages.get("components");
             LOGGER.info("{} artifacts found that are depending on {}", components.size(), coordinate);
@@ -80,7 +87,7 @@ public class MavenCentralRepository implements ArtifactRepository {
         }
     }
 
-    private String post(Artifact.Coordinate coordinate) {
+    private String post(Artifact.Coordinate coordinate, PageOptions pageOptions) {
         String url = "https://central.sonatype.com/api/internal/browse/dependents";
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -90,8 +97,8 @@ public class MavenCentralRepository implements ArtifactRepository {
                                 serializationService.serialize(
                                         new DependentsRequestBody(
                                                 "pkg:maven/%s/%s@%s".formatted(coordinate.groupId(), coordinate.artifactId(), coordinate.version()),
-                                                0,
-                                                5,
+                                                pageOptions.page(),
+                                                pageOptions.pageSize(),
                                                 "",
                                                 new String[]{"dependencyRef:DIRECT"}
                                         )

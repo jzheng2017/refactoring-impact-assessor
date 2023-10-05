@@ -57,6 +57,11 @@ public class JGitRepository implements GitRepository {
     }
 
     @Override
+    public boolean hasDependency(Dependency dependency) {
+        return project.hasDependency(dependency);
+    }
+
+    @Override
     public String toString() {
         return project.toString();
     }
@@ -72,5 +77,9 @@ public class JGitRepository implements GitRepository {
     @Override
     public int hashCode() {
         return Objects.hash(project);
+    }
+
+    public Git getGit() {
+        return git;
     }
 }

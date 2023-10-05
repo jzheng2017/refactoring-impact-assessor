@@ -23,7 +23,7 @@ public class FileUtil {
             return foundFiles[0];
         }
 
-        throw new FileNotFoundException("Could not find file '%s'".formatted(directory.getName()));
+        throw new FileNotFoundException("Could not find file in directory '%s'".formatted(directory.getName()));
     }
 
     public static Collection<File> findFileRecursive(File directory, String fileName, String suffix) {

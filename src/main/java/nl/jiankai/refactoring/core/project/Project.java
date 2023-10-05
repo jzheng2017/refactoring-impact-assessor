@@ -34,4 +34,10 @@ public interface Project extends Identifiable {
      * @return the project details containing group id, artifact id and the version
      */
     ProjectData getProjectVersion();
+
+    /**
+     * @param dependency the dependency to check
+     * @return whether the projects depend on it
+     */
+    boolean hasDependency(Dependency dependency);
 }

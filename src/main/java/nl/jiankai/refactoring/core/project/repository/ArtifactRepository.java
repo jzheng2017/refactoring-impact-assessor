@@ -18,7 +18,10 @@ public interface ArtifactRepository {
     /**
      * Get the artifacts that are using the artifact matching the provided coordinate
      * @param coordinate the artifact coordinate
+     * @param pageOptions a filter to apply on the results
      * @return a list of artifacts
      */
-    List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate);
+    List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions);
+
+    record PageOptions(int page, int pageSize){}
 }

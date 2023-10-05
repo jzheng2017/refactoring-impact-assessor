@@ -46,6 +46,11 @@ public class MavenProject implements Project {
     }
 
     @Override
+    public boolean hasDependency(Dependency dependency) {
+        return resolve().contains(dependency);
+    }
+
+    @Override
     public String getId() {
         return getLocalPath().getAbsolutePath();
     }

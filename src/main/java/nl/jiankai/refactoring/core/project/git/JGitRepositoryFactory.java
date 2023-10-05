@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URISyntaxException;
 
 public class JGitRepositoryFactory implements ProjectFactory {
@@ -20,18 +21,24 @@ public class JGitRepositoryFactory implements ProjectFactory {
     @Override
     public GitRepository createProject(File directory) {
         try {
-            return new JGitRepository(Git.init().setGitDir(directory).call(), getProject(directory));
-        } catch (GitAPIException e) {
-            throw new GitOperationException("Could not create local git repository", e);
+            return new JGitRepository(Git.open(directory), getProject(directory));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
     public JGitRepository createProject(String repositoryUrl, File repositoryCloneDirectory) {
+        if (repositoryCloneDirectory.exists()) {
+            return (JGitRepository) createProject(repositoryCloneDirectory);
+        }
+
         if (validGitRepository(repositoryUrl)) {
-            CloneCommand cloneCommand = new CloneCommand();
-            cloneCommand.setURI(repositoryUrl);
-            cloneCommand.setDirectory(repositoryCloneDirectory);
-            try (Git git = cloneCommand.call()) {
+
+            try (Git git = Git.cloneRepository()
+                    .setURI(repositoryUrl)
+                    .setDirectory(repositoryCloneDirectory)
+                    .call()
+            ) {
                 return (JGitRepository) createProject(repositoryCloneDirectory);
             } catch (GitAPIException e) {
                 LOGGER.warn("Could not clone the git repository: {}", e.getMessage());
@@ -56,8 +63,12 @@ public class JGitRepositoryFactory implements ProjectFactory {
     }
 
     private ProjectType detectProjectType(File projectRoot) {
-        if (FileUtil.findPomFile(projectRoot).exists()) {
-            return ProjectType.MAVEN;
+        try {
+            if (FileUtil.findPomFile(projectRoot).exists()) {
+                return ProjectType.MAVEN;
+            }
+        } catch (Exception e) {
+            return ProjectType.UNKNOWN;
         }
 
         return ProjectType.UNKNOWN;

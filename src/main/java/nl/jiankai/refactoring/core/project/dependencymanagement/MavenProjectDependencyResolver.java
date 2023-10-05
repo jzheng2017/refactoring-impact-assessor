@@ -1,5 +1,6 @@
 package nl.jiankai.refactoring.core.project.dependencymanagement;
 
+import com.google.common.collect.ImmutableCollection;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
 import nl.jiankai.refactoring.util.FileUtil;
 import org.apache.commons.io.FileUtils;
@@ -25,22 +26,27 @@ public final class MavenProjectDependencyResolver implements ProjectDependencyRe
 
     @Override
     public Collection<Dependency> resolve(File projectRootPath) {
-        MavenStrategyStage resolve =
-                Maven.configureResolver()
-                        .loadPomFromFile(FileUtil.findPomFile(projectRootPath))
-                        .importCompileAndRuntimeDependencies()
-                        .importRuntimeAndTestDependencies()
-                        .resolve();
-        MavenWorkingSession mavenWorkingSession = ((MavenWorkingSessionContainer) resolve).getMavenWorkingSession();
+        try {
+            MavenStrategyStage resolve =
+                    Maven.configureResolver()
+                            .loadPomFromFile(FileUtil.findPomFile(projectRootPath))
+                            .importCompileAndRuntimeDependencies()
+                            .importRuntimeAndTestDependencies()
+                            .resolve();
+            MavenWorkingSession mavenWorkingSession = ((MavenWorkingSessionContainer) resolve).getMavenWorkingSession();
 
-        Set<MavenDependency> dependencies = new HashSet<>();
-        dependencies.addAll(mavenWorkingSession.getDependenciesForResolution());
-        dependencies.addAll(mavenWorkingSession.getDependencyManagement());
+            Set<MavenDependency> dependencies = new HashSet<>();
+            dependencies.addAll(mavenWorkingSession.getDependenciesForResolution());
+            dependencies.addAll(mavenWorkingSession.getDependencyManagement());
 
-        return dependencies
-                .stream()
-                .map(dependency -> new Dependency(dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion()))
-                .collect(Collectors.toSet());
+            return dependencies
+                    .stream()
+                    .map(dependency -> new Dependency(dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion()))
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            LOGGER.error("Something went wrong while resolving the project dependencies", e);
+            return Set.of();
+        }
     }
 
     @Override
