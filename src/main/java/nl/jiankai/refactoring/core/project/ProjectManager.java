@@ -1,5 +1,6 @@
 package nl.jiankai.refactoring.core.project;
 
+import nl.jiankai.refactoring.configuration.ApplicationConfiguration;
 import nl.jiankai.refactoring.tasks.ScheduledTask;
 import nl.jiankai.refactoring.tasks.ScheduledTaskExecutorService;
 import org.slf4j.Logger;
@@ -15,7 +16,7 @@ public final class ProjectManager implements ProjectObservable<Project> {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProjectManager.class);
     private final Map<String, Project> projects = new ConcurrentHashMap<>();
     private ScheduledTaskExecutorService<Void> executorService = new ScheduledTaskExecutorService<>();
-    private ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery();
+    private ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(ApplicationConfiguration.applicationAllProjectsLocation());
     private List<ProjectListener<Project>> listeners = new ArrayList<>();
 
     public ProjectManager() {

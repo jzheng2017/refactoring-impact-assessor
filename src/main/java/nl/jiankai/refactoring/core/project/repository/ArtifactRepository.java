@@ -21,7 +21,8 @@ public interface ArtifactRepository {
      * @param pageOptions a filter to apply on the results
      * @return a list of artifacts
      */
-    List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions);
+    List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions, FilterOptions filterOptions);
 
     record PageOptions(int page, int pageSize){}
+    record FilterOptions(boolean ignoreSameArtifact){}
 }

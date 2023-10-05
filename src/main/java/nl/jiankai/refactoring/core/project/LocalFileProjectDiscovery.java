@@ -18,9 +18,11 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
     private static final Logger LOGGER = LoggerFactory.getLogger(LocalFileProjectDiscovery.class);
     private ScheduledTaskExecutorService<Stream<Project>> executorService = new ScheduledTaskExecutorService<>();
     private ProjectFactory projectFactory;
+    private final String locationToScan;
 
-    public LocalFileProjectDiscovery() {
-        projectFactory = new JGitRepositoryFactory();
+    public LocalFileProjectDiscovery(String locationToScan) {
+        projectFactory = new CompositeProjectFactory();
+        this.locationToScan = locationToScan;
     }
 
     @Override
@@ -29,8 +31,8 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
             createProjectDirectoryIfMissing();
             return executorService.executeTask(
                             ScheduledTask
-                                    .builder((Class<Stream<Project>>)null)
-                                    .task(() -> this.scan(ApplicationConfiguration.applicationAllProjectsLocation()))
+                                    .builder((Class<Stream<Project>>) null)
+                                    .task(this::scan)
                                     .build())
                     .get();
         } catch (InterruptedException | ExecutionException e) {
@@ -39,11 +41,19 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
         }
     }
 
-    private Stream<Project> scan(String directory) {
-        return getAllSubDirectories(directory)
+    private Stream<Project> scan() {
+        return getAllSubDirectories(locationToScan)
                 .stream()
                 .filter(file -> file.isDirectory() && !file.getName().startsWith("."))
-                .map(dir -> projectFactory.createProject(dir));
+                .map(dir -> {
+                    try {
+                        return projectFactory.createProject(dir);
+                    } catch (Exception e) {
+                        LOGGER.warn("Could not create project {}", dir, e);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull);
     }
 
     private List<File> getAllSubDirectories(String directory) {

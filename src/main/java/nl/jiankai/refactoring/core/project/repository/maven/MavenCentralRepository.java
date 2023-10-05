@@ -19,10 +19,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 public class MavenCentralRepository implements ArtifactRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(MavenCentralRepository.class);
@@ -37,7 +34,7 @@ public class MavenCentralRepository implements ArtifactRepository {
             if (!elements.isEmpty()) {
                 String githubLink = elements.get(0).attr("href");
 
-                return Optional.of(new Artifact(coordinate, githubLink));
+                return Optional.of(new Artifact(coordinate, stripUnnecessaryPart(githubLink)));
             } else {
                 LOGGER.warn("Artifact {} has no source control link", coordinate);
             }
@@ -48,41 +45,66 @@ public class MavenCentralRepository implements ArtifactRepository {
         return Optional.empty();
     }
 
+    private String stripUnnecessaryPart(String githubLink) {
+//        if (githubLink.startsWith("scm@")) {
+//            githubLink = githubLink.substring("scm@".length());
+//        } else if (githubLink.startsWith("scm:git@")) {
+//            githubLink = githubLink.substring("scm:git@".length());
+//        }
+//
+//        githubLink = githubLink.replace(".git", "");
+//        githubLink = githubLink.replaceAll(".com:", ".com/");
+//
+
+        return githubLink;
+    }
+
     @Override
-    public List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions) {
+    public List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions, FilterOptions filterOptions) {
         try {
+            Set<GroupAndArtifactId> alreadyFoundArtifacts = new HashSet<>();
             List<Artifact> artifacts = new ArrayList<>();
             String body = post(coordinate, pageOptions);
             Map<String, Object> usages = serializationService.read(body.getBytes());
             List<Map<String, String>> components = (List<Map<String, String>>) usages.get("components");
-            LOGGER.info("{} artifacts found that are depending on {}", components.size(), coordinate);
-            for (Map<String, String> component : components) {
-                if (component.containsKey("sourcePurl")) {
-                    String sourcePurl = component.get("sourcePurl");
-                    String componentCoordinate;
+            if (components != null) {
+                LOGGER.info("{} artifacts found that are depending on {}", components.size(), coordinate);
+                for (Map<String, String> component : components) {
+                    if (component.containsKey("sourcePurl")) {
+                        String sourcePurl = component.get("sourcePurl");
+                        String componentCoordinate;
 
-                    if (sourcePurl.startsWith("pkg:maven/")) {
-                        componentCoordinate = sourcePurl.substring("pkg:maven/".length());
-                    } else {
-                        componentCoordinate = sourcePurl;
-                    }
+                        if (sourcePurl.startsWith("pkg:maven/")) {
+                            componentCoordinate = sourcePurl.substring("pkg:maven/".length());
+                        } else {
+                            componentCoordinate = sourcePurl;
+                        }
 
-                    Artifact.Coordinate artifactCoordinate = Artifact.Coordinate.read(componentCoordinate.replaceAll("@", "/"));
-                    String artifactId = artifactCoordinate.toString();
-                    if (artifactCacheService.isCached(artifactId)) {
-                        Optional<Artifact> artifactOptional = artifactCacheService.get(artifactId);
-                        artifactOptional.ifPresentOrElse(artifacts::add, () -> LOGGER.warn("Something went wrong while retrieving {} from the cache", artifactId));
-                    } else {
-                        Optional<Artifact> artifactOptional = getArtifact(artifactCoordinate);
-                        artifactOptional.ifPresent(artifact -> {
-                            artifactCacheService.write(artifact);
-                            artifacts.add(artifact);
-                        });
+                        Artifact.Coordinate artifactCoordinate = Artifact.Coordinate.read(componentCoordinate.replaceAll("@", "/"));
+                        GroupAndArtifactId groupAndArtifactId = new GroupAndArtifactId(artifactCoordinate.groupId(), artifactCoordinate.artifactId());
+
+                        if (!alreadyFoundArtifacts.contains(groupAndArtifactId)) {
+                            String artifactId = artifactCoordinate.toString();
+                            if (artifactCacheService.isCached(artifactId)) {
+                                Optional<Artifact> artifactOptional = artifactCacheService.get(artifactId);
+                                artifactOptional.ifPresentOrElse(artifacts::add, () -> LOGGER.warn("Something went wrong while retrieving {} from the cache", artifactId));
+                            } else {
+                                Optional<Artifact> artifactOptional = getArtifact(artifactCoordinate);
+                                artifactOptional.ifPresent(artifact -> {
+                                    artifactCacheService.write(artifact);
+                                    artifacts.add(artifact);
+                                });
+                            }
+                            alreadyFoundArtifacts.add(groupAndArtifactId);
+                        } else {
+                            LOGGER.info("Skipped: Artifact '{}' has already been added", groupAndArtifactId);
+                        }
                     }
                 }
             }
-            return artifacts;
+            return artifacts.stream().map(artifact -> new Artifact(artifact.coordinate(), stripUnnecessaryPart(artifact.sourceControlUrl()))).toList();
         } catch (Exception e) {
+            LOGGER.error("Something went wrong", e);
             return new ArrayList<>();
         }
     }
@@ -92,7 +114,12 @@ public class MavenCentralRepository implements ArtifactRepository {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(5))
-                .headers("Content-Type", "application/json")
+                .headers(
+                        "Content-Type", "application/json",
+                        "Accept", "*/*",
+                        "User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0",
+                        "Origin", "https://central.sonatype.com"
+                )
                 .POST(HttpRequest.BodyPublishers.ofByteArray(
                                 serializationService.serialize(
                                         new DependentsRequestBody(
@@ -108,7 +135,7 @@ public class MavenCentralRepository implements ArtifactRepository {
                 .build();
 
         try {
-            LOGGER.info("Sending http post request to retrieve artifact dependents");
+            LOGGER.info("Sending http post request to retrieve artifact dependents with arguments: page number {} and page size {}", pageOptions.page(), pageOptions.pageSize());
             return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString()).body();
         } catch (IOException | InterruptedException e) {
             LOGGER.warn("Something went wrong while retrieving the dependents", e);
@@ -117,5 +144,12 @@ public class MavenCentralRepository implements ArtifactRepository {
     }
 
     private record DependentsRequestBody(String purl, int page, int size, String searchTerm, String[] filter) {
+    }
+
+    private record GroupAndArtifactId(String groupId, String artifactId) {
+        @Override
+        public String toString() {
+            return groupId + "-" + artifactId;
+        }
     }
 }

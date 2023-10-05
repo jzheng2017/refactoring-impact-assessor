@@ -79,7 +79,7 @@ public class LocalFileStorageService implements StorageService<String> {
 
         try (FileOutputStream outputStream = new FileOutputStream(fileLocation, append)) {
             outputStream.write(content.getBytes());
-            LOGGER.info("Successfully written to '{}'", fileLocation);
+            LOGGER.debug("Successfully written to '{}'", fileLocation);
         } catch (IOException e) {
             LOGGER.warn("Could not write the content to the file '{}'. Reason: {}", fileLocation, e.getMessage());
         }
@@ -101,7 +101,7 @@ public class LocalFileStorageService implements StorageService<String> {
     private void tryCreateFile(File file) {
         try {
             if (file.createNewFile()) {
-                LOGGER.info("File created at location '{}'", fileLocation);
+                LOGGER.debug("File created at location '{}'", fileLocation);
             }
         } catch (IOException e) {
             LOGGER.warn("Could not create file at location '{}'", fileLocation);

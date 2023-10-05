@@ -62,7 +62,7 @@ public class MultiFileCacheService<T extends Identifiable> implements CacheServi
         LocalFileStorageService fileStorageService = new LocalFileStorageService(createFileLocation(entity.getId()), true);
         cache.put(entity.getId(), entity);
         fileStorageService.write(new String(serializationService.serialize(entity)));
-        LOGGER.info("Written entity '{}' to the cache", entity.getId());
+        LOGGER.debug("Written entity '{}' to the cache", entity.getId());
     }
 
     @Override

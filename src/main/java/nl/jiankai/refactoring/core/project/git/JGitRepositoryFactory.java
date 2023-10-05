@@ -29,12 +29,14 @@ public class JGitRepositoryFactory implements ProjectFactory {
 
     public JGitRepository createProject(String repositoryUrl, File repositoryCloneDirectory) {
         if (repositoryCloneDirectory.exists()) {
+            LOGGER.info("Git repository '{}' already exists locally", repositoryUrl);
             return (JGitRepository) createProject(repositoryCloneDirectory);
         }
 
         if (validGitRepository(repositoryUrl)) {
 
             try (Git git = Git.cloneRepository()
+                    .setTimeout(5)
                     .setURI(repositoryUrl)
                     .setDirectory(repositoryCloneDirectory)
                     .call()

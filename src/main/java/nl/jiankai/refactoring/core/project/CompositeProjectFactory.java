@@ -22,7 +22,7 @@ public class CompositeProjectFactory implements ProjectFactory {
 
 
     private boolean isGitProject(File directory) {
-        return RepositoryCache.FileKey.isGitRepository(directory, FS.DETECTED);
+        return RepositoryCache.FileKey.isGitRepository(directory, FS.DETECTED) || RepositoryCache.FileKey.isGitRepository(new File(directory.getAbsolutePath() + File.separator + ".git"), FS.DETECTED);
     }
 
     private boolean isMavenProject(File file) {
