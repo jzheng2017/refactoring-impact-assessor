@@ -5,6 +5,7 @@ import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import nl.jiankai.refactoring.configuration.CacheLocation;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectCoordinate;
+import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
 import nl.jiankai.refactoring.core.storage.api.CacheService;
 import nl.jiankai.refactoring.core.storage.api.Identifiable;
 import nl.jiankai.refactoring.core.storage.filestorage.MultiFileCacheService;
@@ -29,6 +30,11 @@ public class JavaParserProjectQuery implements ProjectQuery {
         users.parallelStream().forEach(project -> computeMethodUsagesForProject(project, allMethodNames, methodUsages));
 
         return sortByUsagesHighToLow(methodUsages);
+    }
+
+    @Override
+    public Optional<String> findLatestVersionWithDependency(Project project, Dependency dependency) {
+        throw new UnsupportedOperationException();
     }
 
     private static List<MethodUsages> sortByUsagesHighToLow(Map<String, Long> methodUsages) {

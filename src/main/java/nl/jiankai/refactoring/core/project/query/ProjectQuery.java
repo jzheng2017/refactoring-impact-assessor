@@ -1,9 +1,12 @@
 package nl.jiankai.refactoring.core.project.query;
 
 import nl.jiankai.refactoring.core.project.Project;
+import nl.jiankai.refactoring.core.project.repository.Artifact;
+import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * An interface allowing you to query information about the project
@@ -17,4 +20,6 @@ public interface ProjectQuery {
      * @return an ordered list of methods from highest to lowest
      */
     List<MethodUsages> mostUsedMethods(Project provider, Collection<Project> users);
+
+    Optional<String> findLatestVersionWithDependency(Project project, Dependency dependency);
 }

@@ -1,6 +1,7 @@
 package nl.jiankai.refactoring.core.project.maven;
 
 
+import nl.jiankai.refactoring.core.project.ProjectType;
 import nl.jiankai.refactoring.core.project.dependencymanagement.MavenProjectDependencyResolver;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
 import nl.jiankai.refactoring.core.project.Project;
@@ -48,6 +49,11 @@ public class MavenProject implements Project {
     @Override
     public boolean hasDependency(Dependency dependency) {
         return resolve().contains(dependency);
+    }
+
+    @Override
+    public ProjectType getProjectType() {
+        return ProjectType.MAVEN;
     }
 
     @Override

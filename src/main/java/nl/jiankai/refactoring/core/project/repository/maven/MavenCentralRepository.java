@@ -46,15 +46,17 @@ public class MavenCentralRepository implements ArtifactRepository {
     }
 
     private String stripUnnecessaryPart(String githubLink) {
-//        if (githubLink.startsWith("scm@")) {
-//            githubLink = githubLink.substring("scm@".length());
-//        } else if (githubLink.startsWith("scm:git@")) {
-//            githubLink = githubLink.substring("scm:git@".length());
-//        }
-//
-//        githubLink = githubLink.replace(".git", "");
-//        githubLink = githubLink.replaceAll(".com:", ".com/");
-//
+        if (githubLink.startsWith("scm@")) {
+            githubLink = githubLink.substring("scm@".length());
+            githubLink = !githubLink.startsWith("http://") ? "http://" + githubLink : githubLink;
+        } else if (githubLink.startsWith("scm:git@")) {
+            githubLink = githubLink.substring("scm:git@".length());
+            githubLink = !githubLink.startsWith("http://") ? "http://" + githubLink : githubLink;
+
+        }
+
+        githubLink = githubLink.replace(".git", "");
+        githubLink = githubLink.replaceAll(".com:", ".com/");
 
         return githubLink;
     }
@@ -113,7 +115,7 @@ public class MavenCentralRepository implements ArtifactRepository {
         String url = "https://central.sonatype.com/api/internal/browse/dependents";
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(5))
+                .timeout(Duration.ofSeconds(1))
                 .headers(
                         "Content-Type", "application/json",
                         "Accept", "*/*",

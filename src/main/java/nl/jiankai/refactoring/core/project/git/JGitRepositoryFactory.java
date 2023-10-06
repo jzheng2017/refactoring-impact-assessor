@@ -1,10 +1,10 @@
 package nl.jiankai.refactoring.core.project.git;
 
+import nl.jiankai.refactoring.core.project.ProjectType;
 import nl.jiankai.refactoring.core.project.maven.MavenProjectFactory;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.ProjectFactory;
 import nl.jiankai.refactoring.util.FileUtil;
-import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.URIish;
@@ -36,7 +36,7 @@ public class JGitRepositoryFactory implements ProjectFactory {
         if (validGitRepository(repositoryUrl)) {
 
             try (Git git = Git.cloneRepository()
-                    .setTimeout(5)
+                    .setTimeout(1)
                     .setURI(repositoryUrl)
                     .setDirectory(repositoryCloneDirectory)
                     .call()
@@ -74,11 +74,6 @@ public class JGitRepositoryFactory implements ProjectFactory {
         }
 
         return ProjectType.UNKNOWN;
-    }
-
-    private enum ProjectType {
-        MAVEN,
-        UNKNOWN
     }
 
 

@@ -1,5 +1,6 @@
 package nl.jiankai.refactoring.core.project.git;
 
+import nl.jiankai.refactoring.core.project.ProjectType;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
@@ -59,6 +60,11 @@ public class JGitRepository implements GitRepository {
     @Override
     public boolean hasDependency(Dependency dependency) {
         return project.hasDependency(dependency);
+    }
+
+    @Override
+    public ProjectType getProjectType() {
+        return project.getProjectType();
     }
 
     @Override

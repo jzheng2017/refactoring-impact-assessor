@@ -8,6 +8,7 @@ import nl.jiankai.refactoring.core.project.ProjectDiscovery;
 import nl.jiankai.refactoring.core.project.git.GitRepository;
 import nl.jiankai.refactoring.core.project.git.JGitRepository;
 import nl.jiankai.refactoring.core.project.git.JGitRepositoryFactory;
+import nl.jiankai.refactoring.core.project.query.JGitProjectQuery;
 import nl.jiankai.refactoring.core.project.query.JavaParserProjectQuery;
 import nl.jiankai.refactoring.core.project.query.MethodUsages;
 import nl.jiankai.refactoring.core.project.query.ProjectQuery;
@@ -18,6 +19,7 @@ import nl.jiankai.refactoring.core.refactoring.*;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
 import nl.jiankai.refactoring.core.refactoring.javaparser.JavaParserRefactoringImpactAssessor;
 import nl.jiankai.refactoring.core.refactoring.refactoringminer.RefactoringMinerRefactoringDetector;
+import nl.jiankai.refactoring.core.storage.api.Identifiable;
 import nl.jiankai.refactoring.util.JavaParserUtil;
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
 import org.eclipse.aether.DefaultRepositorySystemSession;
@@ -44,17 +46,22 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import static java.util.stream.Collectors.toMap;
+
 public class Main {
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
     private static final String baseLocation = ApplicationConfiguration.applicationAllProjectsLocation();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws URISyntaxException, MalformedURLException {
 //        RefactoringImpactAssessor assessor = new CachedRefactoringImpactAssessor(new JavaParserRefactoringImpactAssessor());
 //
 //
@@ -80,12 +87,51 @@ public class Main {
 //        Collection<Refactoring> refactorings = refactoringDetector.detectRefactoringBetweenCommit(gitRepository, "59b6954", "606b568", Set.of(RefactoringType.METHOD_NAME, RefactoringType.METHOD_SIGNATURE));
 //        refactorings.forEach(System.out::println);
 
+//        List<GitRepository> repositories = getDependentRepositories(new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0"), 100);
+//        repositories.forEach(System.out::println);
 
+        Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
+        Dependency dependency = new Dependency("org.apache.commons", "commons-text", "1.10.0");
+        JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
+        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
+        Map<Project, Optional<String>> projects = projectDiscovery
+                .discover()
+                .parallel()
+                .collect(toMap(p->p, project -> {
+                    try {
+                        return gitProjectQuery.findLatestVersionWithDependency(project, dependency);
+                    } catch (Exception e) {
+                        return Optional.empty();
+                    }
+                }));
+
+        projects.forEach((key, value) -> System.out.println(key + "- hash: " + value.orElse("no hash found")));
+        System.out.println(projects.values().stream().filter(Optional::isEmpty).count());
+        System.out.println(projects.size());
+    }
+
+    private static File createProjectLocation(Artifact.Coordinate coordinate) {
+        return new File(baseLocation + File.separator + coordinate.toString() + "-dependents");
+    }
+
+    private static File createProjectLocation(Dependency dependency) {
+        return new File(baseLocation + File.separator + dependency.toString() + "-dependents");
+    }
+
+    private static File createRepositoryLocation(Dependency dependency, String directory) {
+        return new File(createProjectLocation(dependency).getAbsolutePath() + File.separator + directory);
+    }
+
+    private static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
+        Set<Object> seen = ConcurrentHashMap.newKeySet();
+        return t -> seen.add(keyExtractor.apply(t));
+    }
+
+    private static List<GitRepository> getDependentRepositories(Artifact.Coordinate parentArtifact, int desiredRepositories) {
         ArtifactRepository artifactRepository = new MavenCentralRepository();
         JGitRepositoryFactory factory = new JGitRepositoryFactory();
 
-        int page = 45;
-        Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
+        int page = 0;
         File artifactLocation = createProjectLocation(parentArtifact);
         ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(artifactLocation.getAbsolutePath());
         List<GitRepository> repositories = projectDiscovery
@@ -95,7 +141,7 @@ public class Main {
                 .toList();
 
         int retries = 0;
-        while (repositories.size() <= 100) {
+        while (repositories.size() <= desiredRepositories) {
             List<Artifact> artifacts = artifactRepository.getArtifactUsages(parentArtifact, new ArtifactRepository.PageOptions(page, 200), new ArtifactRepository.FilterOptions(true));
             if (artifacts.isEmpty()) {
                 LOGGER.info("No more artifacts could be found at page {}. Total usable projects: {}.", page, repositories.size());
@@ -122,41 +168,7 @@ public class Main {
             page++;
         }
 
-        repositories.forEach(System.out::println);
-
-//        Dependency dependency = new Dependency("org.apache.commons", "commons-text", "1.10.0");
-//        JGitRepository gitRepository = new JGitRepositoryFactory().createProject("https://github.com/apache/commons-text", new File("/home/jiankai/Documents/refactoring-storage/projects/commons-text"));
-//        JGitRepository gitRepository = new JGitRepositoryFactory().createProject("https://github.com/limaofeng/jfantasy-framework", new File("/home/jiankai/Documents/refactoring-storage/projects/jfantasy-framework"));
-//        System.out.println(gitRepository.hasDependency(new Dependency("org.apache.commons", "commons-text", "1.10.0")));
-//        try {
-//            Git git = gitRepository.getGit();
-//            Repository repository = git.getRepository();
-//            ObjectId head = repository.resolve(Constants.HEAD);
-//            Iterable<RevCommit> iterable = git.log().add(head).addPath("pom.xml").call();
-//            int i = 1;
-//            for (RevCommit rev : iterable) {
-//                System.out.println("iteration " + i++);
-//                git
-//                        .checkout()
-//                        .addPath("pom.xml")
-//                        .setStartPoint(rev)
-//                        .call();
-//                if (gitRepository.hasDependency(dependency)) {
-//                    System.out.println("dependency found in pom");
-//                    break;
-//                }
-//            }
-//        } catch (GitAPIException | IOException e) {
-//            throw new RuntimeException(e);
-//        }
+        return repositories;
     }
 
-    public static File createProjectLocation(Artifact.Coordinate coordinate) {
-        return new File(baseLocation + File.separator + coordinate.toString() + "-dependents");
-    }
-
-    public static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
-        Set<Object> seen = ConcurrentHashMap.newKeySet();
-        return t -> seen.add(keyExtractor.apply(t));
-    }
 }

@@ -40,4 +40,6 @@ public interface Project extends Identifiable {
      * @return whether the projects depend on it
      */
     boolean hasDependency(Dependency dependency);
+
+    ProjectType getProjectType();
 }
