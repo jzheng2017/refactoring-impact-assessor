@@ -22,8 +22,6 @@ public class RefactoringStatisticsGenerator {
     }
 
     private static List<RefactoringStatistics.Ranking> computeProjectsWithMostImpact(Map<ProjectData, List<RefactoringImpact>> projectImpactInfo) {
-
-
         return projectImpactInfo
                 .entrySet()
                 .stream()

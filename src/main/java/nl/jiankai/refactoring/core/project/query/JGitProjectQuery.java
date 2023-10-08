@@ -22,7 +22,7 @@ public class JGitProjectQuery implements ProjectQuery {
     private static final Logger LOGGER = LoggerFactory.getLogger(JGitProjectQuery.class);
 
     @Override
-    public List<MethodUsages> mostUsedMethods(Project provider, Collection<Project> users) {
+    public List<MethodUsages> mostUsedMethods(Project provider, Collection<? extends Project> users) {
         return new JavaParserProjectQuery().mostUsedMethods(provider, users);
     }
 
@@ -35,11 +35,7 @@ public class JGitProjectQuery implements ProjectQuery {
                 ObjectId head = repository.resolve(Constants.HEAD);
                 Iterable<RevCommit> iterable = git.log().add(head).addPath("pom.xml").call();
                 for (RevCommit rev : iterable) {
-                    git
-                            .checkout()
-                            .addPath("pom.xml")
-                            .setStartPoint(rev)
-                            .call();
+                    gitRepository.checkout(rev.getName(), List.of("pom.xml"));
                     if (gitRepository.hasDependency(dependency)) {
                         LOGGER.info("Dependency '{}' found in latest commit '{}' of project '{}'", dependency, rev.getName(), project.getId());
                         return Optional.of(rev.getName());

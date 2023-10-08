@@ -1,12 +1,15 @@
 package nl.jiankai.refactoring;
 
-import com.github.javaparser.ast.nodeTypes.NodeWithRange;
+import com.github.javaparser.Range;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import nl.jiankai.refactoring.configuration.ApplicationConfiguration;
 import nl.jiankai.refactoring.core.project.LocalFileProjectDiscovery;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.ProjectDiscovery;
 import nl.jiankai.refactoring.core.project.git.GitRepository;
-import nl.jiankai.refactoring.core.project.git.JGitRepository;
 import nl.jiankai.refactoring.core.project.git.JGitRepositoryFactory;
 import nl.jiankai.refactoring.core.project.query.JGitProjectQuery;
 import nl.jiankai.refactoring.core.project.query.JavaParserProjectQuery;
@@ -17,43 +20,19 @@ import nl.jiankai.refactoring.core.project.repository.ArtifactRepository;
 import nl.jiankai.refactoring.core.project.repository.maven.MavenCentralRepository;
 import nl.jiankai.refactoring.core.refactoring.*;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
-import nl.jiankai.refactoring.core.refactoring.javaparser.JavaParserRefactoringImpactAssessor;
 import nl.jiankai.refactoring.core.refactoring.refactoringminer.RefactoringMinerRefactoringDetector;
-import nl.jiankai.refactoring.core.storage.api.Identifiable;
 import nl.jiankai.refactoring.util.JavaParserUtil;
-import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
-import org.eclipse.aether.DefaultRepositorySystemSession;
-import org.eclipse.aether.impl.RemoteRepositoryManager;
-import org.eclipse.aether.internal.impl.DefaultRemoteRepositoryManager;
-import org.eclipse.jgit.api.CreateBranchCommand;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.errors.AmbiguousObjectException;
-import org.eclipse.jgit.errors.IncorrectObjectTypeException;
-import org.eclipse.jgit.lib.Constants;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevWalk;
-import org.eclipse.jgit.transport.URIish;
-import org.eclipse.jgit.treewalk.filter.AndTreeFilter;
-import org.eclipse.jgit.treewalk.filter.PathFilterGroup;
-import org.eclipse.jgit.treewalk.filter.TreeFilter;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toMap;
 
@@ -76,38 +55,74 @@ public class Main {
 //        GitRepository test2 = new JGitRepositoryFactory().createProject(new File("/Users/Jiankai/ref-plugin/projects/jzheng2017-plugin-test-repo-2"));
 //
 //
-//        ProjectQuery projectQuery = new JavaParserProjectQuery();
-//        List<MethodUsages> usages = projectQuery.mostUsedMethods(apacheProject, List.of(test, test2));
-//        usages.stream().filter(methodUsages -> methodUsages.usages() > 0).limit(5).forEach(System.out::println);
-//
 
-        //refactoring between two commits
-//        GitRepository gitRepository = new JGitRepositoryFactory().createProject(new File("/Users/Jiankai/IdeaProjects/commons-text"));
-//        RefactoringDetector refactoringDetector = new RefactoringMinerRefactoringDetector();
-//        Collection<Refactoring> refactorings = refactoringDetector.detectRefactoringBetweenCommit(gitRepository, "59b6954", "606b568", Set.of(RefactoringType.METHOD_NAME, RefactoringType.METHOD_SIGNATURE));
-//        refactorings.forEach(System.out::println);
-
-//        List<GitRepository> repositories = getDependentRepositories(new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0"), 100);
-//        repositories.forEach(System.out::println);
-
+//        refactoring between two commits
+        GitRepository parentProject = new JGitRepositoryFactory().createProject(new File("/home/jiankai/IdeaProjects/commons-text"));
         Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
-        Dependency dependency = new Dependency("org.apache.commons", "commons-text", "1.10.0");
-        JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
-        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
-        Map<Project, Optional<String>> projects = projectDiscovery
-                .discover()
-                .parallel()
-                .collect(toMap(p->p, project -> {
-                    try {
-                        return gitProjectQuery.findLatestVersionWithDependency(project, dependency);
-                    } catch (Exception e) {
-                        return Optional.empty();
-                    }
-                }));
 
-        projects.forEach((key, value) -> System.out.println(key + "- hash: " + value.orElse("no hash found")));
-        System.out.println(projects.values().stream().filter(Optional::isEmpty).count());
-        System.out.println(projects.size());
+        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
+
+//        List<MethodDeclaration> allRefactoredMethods = findAllRefactoredMethods(parentProject, "59b6954", "606b568");
+
+//        System.out.println(allRefactoredMethods)
+//
+        ProjectQuery projectQuery = new JavaParserProjectQuery();
+        long start = System.currentTimeMillis();
+        List<MethodUsages> usages = projectQuery.mostUsedMethods(parentProject, projectDiscovery.discover().toList());
+        long end = System.currentTimeMillis();
+        usages.stream().filter(methodUsages -> methodUsages.usages() > 0).limit(10).forEach(System.out::println);
+        System.out.println(end-start);
+//        repositories.forEach(System.out::println);
+//
+//        Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
+//        Dependency dependency = new Dependency("org.apache.commons", "commons-text", "1.10.0");
+//        JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
+//        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
+//        Map<Project, Optional<String>> projects = projectDiscovery
+//                .discover()
+//                .parallel()
+//                .collect(toMap(p->p, project -> {
+//                    try {
+//                        return gitProjectQuery.findLatestVersionWithDependency(project, dependency);
+//                    } catch (Exception e) {
+//                        return Optional.empty();
+//                    }
+//                }));
+//
+//        projects.forEach((key, value) -> System.out.println(key + "- hash: " + value.orElse("no hash found")));
+//        System.out.println(projects.values().stream().filter(Optional::isEmpty).count());
+//        System.out.println(projects.size());
+    }
+
+    private static List<MethodDeclaration> findAllRefactoredMethods(GitRepository gitRepository, String startCommitId, String endCommitId) {
+        RefactoringDetector refactoringDetector = new RefactoringMinerRefactoringDetector();
+        Collection<Refactoring> refactorings = refactoringDetector.detectRefactoringBetweenCommit(gitRepository, startCommitId, endCommitId, Set.of(RefactoringType.METHOD_NAME, RefactoringType.METHOD_SIGNATURE));
+        List<CompilationUnit> refactoredClasses = JavaParserUtil.getClasses(gitRepository, refactorings.stream().map(Refactoring::filePath).collect(Collectors.toList())).stream().toList();
+        Set<String> paths = refactorings.stream().map(Refactoring::packagePath).collect(Collectors.toSet());
+
+        List<ClassOrInterfaceDeclaration> classes = refactoredClasses
+                .stream()
+                .flatMap(c -> c.getTypes().stream().filter(t -> t instanceof ClassOrInterfaceDeclaration).map(r -> (ClassOrInterfaceDeclaration) r))
+                .filter(c -> paths.contains(c.getFullyQualifiedName().orElse("")))
+                .toList();
+
+        return classes
+                .stream()
+                .flatMap(c ->
+                        c
+                                .getMembers()
+                                .stream()
+                                .filter(BodyDeclaration::isMethodDeclaration)
+                                .map(b -> (MethodDeclaration) b))
+                .filter(method -> {
+                    Range methodRange = method.getRange().orElse(null);
+
+                    if (methodRange == null) {
+                        return false;
+                    }
+                    return refactorings.stream().anyMatch(r -> Range.range(r.position().rowStart(), r.position().columnStart(), r.position().rowEnd(), r.position().columnEnd()).contains(methodRange));
+                })
+                .toList();
     }
 
     private static File createProjectLocation(Artifact.Coordinate coordinate) {

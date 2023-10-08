@@ -1,5 +1,6 @@
 package nl.jiankai.refactoring.util;
 
+import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
@@ -57,7 +59,8 @@ public class JavaParserUtil {
     public static Stream<MethodCallExpr> getAllMethodCalls(Project project) {
         return getProject(project)
                 .parallelStream()
-                .flatMap(compilationUnit -> compilationUnit.findAll(MethodCallExpr.class).stream());
+                .flatMap(compilationUnit -> compilationUnit.findAll(MethodCallExpr.class).stream())
+                .sequential();
     }
 
 
@@ -65,9 +68,32 @@ public class JavaParserUtil {
         return getProject(new CompositeProjectFactory().createProject(pathToProject));
     }
 
+    public static Collection<CompilationUnit> getClasses(Project project, List<String> relativePaths) {
+
+
+        return getProjectAsStream(project).filter(compilationUnit -> {
+            try {
+                String filePath = compilationUnit.getStorage().orElseThrow().getPath().toString();
+
+                return relativePaths.stream().anyMatch(filePath::endsWith);
+            } catch (Exception e) {
+                return false;
+            }
+        }).toList();
+    }
+
     public static Collection<CompilationUnit> getProject(Project project) {
-        project.install();
-        Collection<File> jarLocations = project.jars();
+        return getProjectAsStream(project).toList();
+    }
+
+    public static Stream<CompilationUnit> getProjectAsStream(Project project) {
+        Collection<File> jarLocations = new ArrayList<>();
+        try {
+            project.install();
+            jarLocations = project.jars();
+        } catch (Exception exception) {
+            LOGGER.warn("Could not properly install project '{}' dependencies. Parsing the project may cause problems...", project.getId());
+        }
         File projectPath = project.getLocalPath();
         List<File> allSourceDirectories = collectAllSourceDirectories(projectPath);
         try {
@@ -96,13 +122,12 @@ public class JavaParserUtil {
                             })
                     .filter(ParseResult::isSuccessful)
                     .map(parseResult -> parseResult.getResult().orElse(null))
-                    .filter(Objects::nonNull)
-                    .toList();
+                    .filter(Objects::nonNull);
         } catch (Exception ex) {
             LOGGER.warn("Parsing project '{}' went wrong. Reason: {}", projectPath, ex.getMessage(), ex);
         }
 
-        return new ArrayList<>();
+        return Stream.empty();
     }
 
     public static Stream<MethodDeclaration> getAllPublicMethods(Project project) {

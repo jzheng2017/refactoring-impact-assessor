@@ -4,13 +4,25 @@ import nl.jiankai.refactoring.core.project.ProjectType;
 import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectData;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
+import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.errors.AmbiguousObjectException;
+import org.eclipse.jgit.errors.IncorrectObjectTypeException;
+import org.eclipse.jgit.errors.MissingObjectException;
+import org.eclipse.jgit.lib.AnyObjectId;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 
 public class JGitRepository implements GitRepository {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JGitRepository.class);
     private final Git git;
     private final Project project;
 
@@ -87,5 +99,18 @@ public class JGitRepository implements GitRepository {
 
     public Git getGit() {
         return git;
+    }
+
+    @Override
+    public void checkout(String commitId, List<String> paths) {
+        try {
+            CheckoutCommand checkoutCommand = git.checkout();
+            checkoutCommand.setStartPoint(commitId);
+            checkoutCommand.addPaths(paths);
+            checkoutCommand.call();
+        } catch (GitAPIException e) {
+            LOGGER.warn("Could not checkout commit '{}'", commitId, e);
+            throw new GitOperationException("Could not checkout commit '%s'".formatted(commitId));
+        }
     }
 }

@@ -19,7 +19,7 @@ public interface ProjectQuery {
      * @param users the projects that uses the methods from the provider project
      * @return an ordered list of methods from highest to lowest
      */
-    List<MethodUsages> mostUsedMethods(Project provider, Collection<Project> users);
+    List<MethodUsages> mostUsedMethods(Project provider, Collection<? extends Project> users);
 
     Optional<String> findLatestVersionWithDependency(Project project, Dependency dependency);
 }

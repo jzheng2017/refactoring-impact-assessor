@@ -84,7 +84,7 @@ public class JavaParserRefactoringImpactAssessor implements RefactoringImpactAss
 
                         return new RefactoringImpact(
                                 filePath, fileName, getPackageName(method), getClassName(method), method.getNameAsString(),
-                                new RefactoringImpact.Position(range.begin.column, range.end.column, range.begin.line, range.end.line),
+                                new Position(range.begin.column, range.end.column, range.begin.line, range.end.line),
                                 JavaParserUtil.isBreakingChange(method, refactoringData));
                     });
         } else {
