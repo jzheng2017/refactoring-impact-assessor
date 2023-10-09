@@ -106,7 +106,9 @@ public class JGitRepository implements GitRepository {
         try {
             CheckoutCommand checkoutCommand = git.checkout();
             checkoutCommand.setStartPoint(commitId);
-            checkoutCommand.addPaths(paths);
+            if (!paths.isEmpty()) {
+                checkoutCommand.addPaths(paths);
+            }
             checkoutCommand.call();
         } catch (GitAPIException e) {
             LOGGER.warn("Could not checkout commit '{}'", commitId, e);

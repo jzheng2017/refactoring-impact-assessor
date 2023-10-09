@@ -69,8 +69,6 @@ public class JavaParserUtil {
     }
 
     public static Collection<CompilationUnit> getClasses(Project project, List<String> relativePaths) {
-
-
         return getProjectAsStream(project).filter(compilationUnit -> {
             try {
                 String filePath = compilationUnit.getStorage().orElseThrow().getPath().toString();

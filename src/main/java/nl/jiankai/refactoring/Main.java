@@ -41,22 +41,19 @@ public class Main {
     private static final String baseLocation = ApplicationConfiguration.applicationAllProjectsLocation();
 
     public static void main(String[] args) throws URISyntaxException, MalformedURLException {
-//        RefactoringImpactAssessor assessor = new CachedRefactoringImpactAssessor(new JavaParserRefactoringImpactAssessor());
-//
-//
-//        ImpactAssessment assessment = assessor.assesImpact(new RefactoringData("java.io.PrintStream", "println", "java.io.PrintStream.println(java.lang.String)", RefactoringType.METHOD_NAME));
-//        System.out.println(assessment.refactoringStatistics());
-////
+        /**
+         * ALGORITHM STEPS:
+         * 1: Use RefactoringMiner to get all method-related refactorings
+         * 2: For each library project
+         * 2.1: Compute all public methods of library project
+         * 2.2: Fetch 100 projects depending on library project
+         * 2.3: Compute library public method usages by dependent projects
+         * 2.4: Compute correlation between popular api methods and refactored methods
+         * 2.5: Write results to file
+         * 3: Display results to console
+         */
 
-//        library
-//        GitRepository apacheProject = new JGitRepositoryFactory().createProject(new File("/Users/Jiankai/IdeaProjects/commons-text"));
-//        //projects using the library
-//        GitRepository test = new JGitRepositoryFactory().createProject(new File("/Users/Jiankai/ref-plugin/projects/jzheng2017-plugin-test-repo"));
-//        GitRepository test2 = new JGitRepositoryFactory().createProject(new File("/Users/Jiankai/ref-plugin/projects/jzheng2017-plugin-test-repo-2"));
-//
-//
-
-//        refactoring between two commits
+        //        refactoring between two commits
         GitRepository parentProject = new JGitRepositoryFactory().createProject(new File("/home/jiankai/IdeaProjects/commons-text"));
         Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
 
@@ -71,7 +68,7 @@ public class Main {
         List<MethodUsages> usages = projectQuery.mostUsedMethods(parentProject, projectDiscovery.discover().toList());
         long end = System.currentTimeMillis();
         usages.stream().filter(methodUsages -> methodUsages.usages() > 0).limit(10).forEach(System.out::println);
-        System.out.println(end-start);
+        System.out.println(end - start);
 //        repositories.forEach(System.out::println);
 //
 //        Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
@@ -97,23 +94,39 @@ public class Main {
     private static List<MethodDeclaration> findAllRefactoredMethods(GitRepository gitRepository, String startCommitId, String endCommitId) {
         RefactoringDetector refactoringDetector = new RefactoringMinerRefactoringDetector();
         Collection<Refactoring> refactorings = refactoringDetector.detectRefactoringBetweenCommit(gitRepository, startCommitId, endCommitId, Set.of(RefactoringType.METHOD_NAME, RefactoringType.METHOD_SIGNATURE));
-        List<CompilationUnit> refactoredClasses = JavaParserUtil.getClasses(gitRepository, refactorings.stream().map(Refactoring::filePath).collect(Collectors.toList())).stream().toList();
-        Set<String> paths = refactorings.stream().map(Refactoring::packagePath).collect(Collectors.toSet());
+        Map<String, List<Refactoring>> refactoringsByCommitMap = refactorings.stream().collect(Collectors.groupingBy(Refactoring::commitId));
+        List<CompilationUnit> refactoredClasses = getRefactoredClasses(gitRepository, refactoringsByCommitMap);
+        Set<String> fullyQualifiedPathsOfRefactoredElements = refactorings.stream().map(Refactoring::packagePath).collect(Collectors.toSet());
 
         List<ClassOrInterfaceDeclaration> classes = refactoredClasses
                 .stream()
-                .flatMap(c -> c.getTypes().stream().filter(t -> t instanceof ClassOrInterfaceDeclaration).map(r -> (ClassOrInterfaceDeclaration) r))
-                .filter(c -> paths.contains(c.getFullyQualifiedName().orElse("")))
+                .flatMap(c -> c.getTypes().stream().filter(ClassOrInterfaceDeclaration.class::isInstance).map(ClassOrInterfaceDeclaration.class::cast))
+                .filter(c -> fullyQualifiedPathsOfRefactoredElements.contains(c.getFullyQualifiedName().orElse("")))
                 .toList();
 
-        return classes
+        return getRefactoredMethods(refactorings, classes);
+    }
+
+    private static List<CompilationUnit> getRefactoredClasses(GitRepository gitRepository, Map<String, List<Refactoring>> refactoringsByCommitMap) {
+        return refactoringsByCommitMap
+                .entrySet()
+                .stream()
+                .flatMap(entry -> {
+                    gitRepository.checkout(entry.getKey());
+                    return JavaParserUtil.getClasses(gitRepository, entry.getValue().stream().map(Refactoring::filePath).toList()).stream();
+                })
+                .toList();
+    }
+
+    private static List<MethodDeclaration> getRefactoredMethods(Collection<Refactoring> refactorings, List<ClassOrInterfaceDeclaration> refactoredClasses) {
+        return refactoredClasses
                 .stream()
                 .flatMap(c ->
                         c
                                 .getMembers()
                                 .stream()
                                 .filter(BodyDeclaration::isMethodDeclaration)
-                                .map(b -> (MethodDeclaration) b))
+                                .map(MethodDeclaration.class::cast))
                 .filter(method -> {
                     Range methodRange = method.getRange().orElse(null);
 
@@ -151,8 +164,8 @@ public class Main {
         ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(artifactLocation.getAbsolutePath());
         List<GitRepository> repositories = projectDiscovery
                 .discover()
-                .filter(p -> p instanceof GitRepository)
-                .map(p -> (GitRepository) p)
+                .filter(GitRepository.class::isInstance)
+                .map(GitRepository.class::cast)
                 .toList();
 
         int retries = 0;
