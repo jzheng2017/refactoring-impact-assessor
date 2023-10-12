@@ -8,4 +8,5 @@ public class CacheLocation {
     public static final String PUBLIC_METHODS = cacheBaseLocation + "public-methods";
     public static final String METHOD_CALLS = cacheBaseLocation + "method-calls";
     public static final String ARTIFACTS = cacheBaseLocation + "artifacts";
+    public static final String PROJECT_REFACTORINGS = cacheBaseLocation + "refactoring";
 }

@@ -1,14 +1,18 @@
 package nl.jiankai.refactoring;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.github.javaparser.Range;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import nl.jiankai.refactoring.configuration.ApplicationConfiguration;
+import nl.jiankai.refactoring.configuration.CacheLocation;
 import nl.jiankai.refactoring.core.project.LocalFileProjectDiscovery;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.ProjectDiscovery;
+import nl.jiankai.refactoring.core.project.dependencymanagement.ProjectCoordinate;
 import nl.jiankai.refactoring.core.project.git.GitRepository;
 import nl.jiankai.refactoring.core.project.git.JGitRepositoryFactory;
 import nl.jiankai.refactoring.core.project.query.JGitProjectQuery;
@@ -21,6 +25,10 @@ import nl.jiankai.refactoring.core.project.repository.maven.MavenCentralReposito
 import nl.jiankai.refactoring.core.refactoring.*;
 import nl.jiankai.refactoring.core.refactoring.javaparser.Dependency;
 import nl.jiankai.refactoring.core.refactoring.refactoringminer.RefactoringMinerRefactoringDetector;
+import nl.jiankai.refactoring.core.storage.api.CacheService;
+import nl.jiankai.refactoring.core.storage.api.Identifiable;
+import nl.jiankai.refactoring.core.storage.filestorage.MultiFileCacheService;
+import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
 import nl.jiankai.refactoring.util.JavaParserUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +37,13 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static java.util.stream.Collectors.reducing;
 import static java.util.stream.Collectors.toMap;
 
 public class Main {
@@ -52,33 +62,43 @@ public class Main {
          * 2.5: Write results to file
          * 3: Display results to console
          */
-
-        //        refactoring between two commits
         GitRepository parentProject = new JGitRepositoryFactory().createProject(new File("/home/jiankai/IdeaProjects/commons-text"));
-        Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
-
-        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
-
-//        List<MethodDeclaration> allRefactoredMethods = findAllRefactoredMethods(parentProject, "59b6954", "606b568");
-
-//        System.out.println(allRefactoredMethods)
-//
-        ProjectQuery projectQuery = new JavaParserProjectQuery();
-        long start = System.currentTimeMillis();
-        List<MethodUsages> usages = projectQuery.mostUsedMethods(parentProject, projectDiscovery.discover().toList());
-        long end = System.currentTimeMillis();
-        usages.stream().filter(methodUsages -> methodUsages.usages() > 0).limit(10).forEach(System.out::println);
-        System.out.println(end - start);
-//        repositories.forEach(System.out::println);
-//
-//        Artifact.Coordinate parentArtifact = new Artifact.Coordinate("org.apache.commons", "commons-text", "1.10.0");
-//        Dependency dependency = new Dependency("org.apache.commons", "commons-text", "1.10.0");
-//        JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
+        Artifact.Coordinate parentArtifact = toCoordinate(parentProject.getProjectVersion().coordinate());
 //        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
-//        Map<Project, Optional<String>> projects = projectDiscovery
-//                .discover()
-//                .parallel()
-//                .collect(toMap(p->p, project -> {
+
+        // refactoring between two commits
+//        CacheService<ProjectRefactoring> projectRefactoringCacheService = new MultiFileCacheService<>(CacheLocation.PROJECT_REFACTORINGS, new JacksonSerializationService(), ProjectRefactoring.class);
+        String startCommitId = "59b6954";
+//        String endCommitId = "606b568";
+//        String projectRefactoringIdentifier = startCommitId + endCommitId;
+//        Optional<ProjectRefactoring> projectRefactoring = projectRefactoringCacheService.get(projectRefactoringIdentifier);
+//        Set<String> allRefactoredMethods = projectRefactoring
+//                .orElseGet(() -> {
+//                    Set<String> methodDeclarations = findAllRefactoredMethods(parentProject, startCommitId, endCommitId)
+//                            .stream()
+//                            .map(m -> {
+//                                try {
+//                                    ResolvedMethodDeclaration resolvedMethodDeclaration = m.resolve();
+//                                    return resolvedMethodDeclaration.getQualifiedSignature();
+//                                } catch (Exception e) {
+//                                    LOGGER.warn("Could not resolve method {}", m.getNameAsString(), e);
+//                                    return "";
+//                                }
+//                            })
+//                            .filter(Predicate.not(String::isEmpty))
+//                            .collect(Collectors.toSet());
+//                    projectRefactoringCacheService.write(new ProjectRefactoring(startCommitId, endCommitId, methodDeclarations));
+//                    return new ProjectRefactoring(startCommitId, endCommitId, methodDeclarations);
+//                })
+//                .refactoredMethods();
+//
+//        //dependents
+//        List<GitRepository> dependents = getDependentRepositories(parentArtifact, 100);
+//        JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
+//        Dependency dependency = toDependency(parentArtifact);
+//        Map<GitRepository, Optional<String>> projects = dependents
+//                .parallelStream()
+//                .collect(toMap(p -> p, project -> {
 //                    try {
 //                        return gitProjectQuery.findLatestVersionWithDependency(project, dependency);
 //                    } catch (Exception e) {
@@ -86,9 +106,52 @@ public class Main {
 //                    }
 //                }));
 //
-//        projects.forEach((key, value) -> System.out.println(key + "- hash: " + value.orElse("no hash found")));
-//        System.out.println(projects.values().stream().filter(Optional::isEmpty).count());
-//        System.out.println(projects.size());
+//        dependents = projects.entrySet()
+//                .stream()
+//                .filter(entry -> {
+//                    Optional<String> commit = entry.getValue();
+//                    if (commit.isPresent()) {
+//                        GitRepository repo = entry.getKey();
+//                        try {
+//                            repo.checkout(commit.get());
+//                        } catch (Exception e) {
+//                            return false;
+//                        }
+//                        return true;
+//                    } else {
+//                        return false;
+//                    }
+//                })
+//                .map(Map.Entry::getKey)
+//                .toList();
+//
+//
+//        //get most used methods
+        ProjectQuery projectQuery = new JavaParserProjectQuery();
+        parentProject.checkout(startCommitId);
+        List<MethodUsages> usages = projectQuery.mostUsedMethods(parentProject, new ArrayList<>());
+        System.out.println();
+//        Set<String> usedMethodsRefactored = usages.stream().filter(method -> method.usages() > 0 && allRefactoredMethods.contains(method.fullyQualifiedSignature())).map(MethodUsages::fullyQualifiedSignature).collect(Collectors.toSet());
+//
+//        usedMethodsRefactored.forEach(System.out::println);
+    }
+
+    @JsonIgnoreProperties({"id"})
+    private record ProjectRefactoring(String startCommitId, String endCommitId,
+                                      Set<String> refactoredMethods) implements Identifiable {
+
+        @Override
+        public String getId() {
+            return startCommitId + endCommitId;
+        }
+    }
+
+    private static Dependency toDependency(Artifact.Coordinate artifactCoordinate) {
+        return new Dependency(artifactCoordinate.groupId(), artifactCoordinate.artifactId(), artifactCoordinate.version());
+    }
+
+    private static Artifact.Coordinate toCoordinate(ProjectCoordinate projectCoordinate) {
+        return new Artifact.Coordinate(projectCoordinate.groupId(), projectCoordinate.artifactId(), projectCoordinate.version());
     }
 
     private static List<MethodDeclaration> findAllRefactoredMethods(GitRepository gitRepository, String startCommitId, String endCommitId) {
@@ -167,6 +230,10 @@ public class Main {
                 .filter(GitRepository.class::isInstance)
                 .map(GitRepository.class::cast)
                 .toList();
+
+        if (!repositories.isEmpty()) {
+            return repositories;
+        }
 
         int retries = 0;
         while (repositories.size() <= desiredRepositories) {

@@ -4,9 +4,11 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.nodeTypes.modifiers.NodeWithPublicModifier;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
@@ -58,9 +60,8 @@ public class JavaParserUtil {
 
     public static Stream<MethodCallExpr> getAllMethodCalls(Project project) {
         return getProject(project)
-                .parallelStream()
-                .flatMap(compilationUnit -> compilationUnit.findAll(MethodCallExpr.class).stream())
-                .sequential();
+                .stream()
+                .flatMap(compilationUnit -> compilationUnit.findAll(MethodCallExpr.class).stream());
     }
 
 
@@ -131,17 +132,35 @@ public class JavaParserUtil {
     public static Stream<MethodDeclaration> getAllPublicMethods(Project project) {
         return getProject(project)
                 .stream()
-                .filter(compilationUnit -> {
+                .map(compilationUnit -> {
                     String classOrInterfaceName = compilationUnit.getPrimaryTypeName().orElse("");
                     ClassOrInterfaceDeclaration classOrInterfaceDeclaration = compilationUnit.getClassByName(classOrInterfaceName).orElseGet(() -> compilationUnit.getInterfaceByName(classOrInterfaceName).orElse(null));
                     if (classOrInterfaceDeclaration != null) {
-                        return classOrInterfaceDeclaration.isPublic() || classOrInterfaceDeclaration.isInterface();
+                        return classOrInterfaceDeclaration;
                     } else {
                         LOGGER.debug("Could not get public methods of class '{}'", classOrInterfaceName);
-                        return false;
+                        return null;
                     }
                 })
-                .flatMap(compilationUnit -> compilationUnit.findAll(MethodDeclaration.class).stream());
+                .filter(Objects::nonNull)
+                .flatMap(JavaParserUtil::getPublicMethodsFromClassOrInterface);
+    }
+
+    private static Stream<MethodDeclaration> getPublicMethodsFromClassOrInterface(ClassOrInterfaceDeclaration classOrInterface) {
+        if (classOrInterface.isInterface() && classOrInterface.isPublic()) {
+            return classOrInterface.getMethods().stream();
+        } else if (classOrInterface.isTopLevelType() && classOrInterface.isPublic()) { // a public class
+            return Stream.concat(
+                    classOrInterface.getMethods().stream().filter(NodeWithPublicModifier::isPublic),
+                    classOrInterface.getMembers() // all inner classes that are public
+                            .stream()
+                            .filter(BodyDeclaration::isClassOrInterfaceDeclaration)
+                            .map(ClassOrInterfaceDeclaration.class::cast)
+                            .flatMap(JavaParserUtil::getPublicMethodsFromClassOrInterface)
+            );
+        }
+
+        return Stream.empty();
     }
 
     private static List<File> collectAllSourceDirectories(File root) {
