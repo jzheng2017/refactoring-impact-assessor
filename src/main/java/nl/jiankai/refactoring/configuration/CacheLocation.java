@@ -9,4 +9,6 @@ public class CacheLocation {
     public static final String METHOD_CALLS = cacheBaseLocation + "method-calls";
     public static final String ARTIFACTS = cacheBaseLocation + "artifacts";
     public static final String PROJECT_REFACTORINGS = cacheBaseLocation + "refactoring";
+    public static final String DEPENDENTS = cacheBaseLocation + "dependents";
+    public static final String PIPELINE_RESULTS = cacheBaseLocation + "results";
 }

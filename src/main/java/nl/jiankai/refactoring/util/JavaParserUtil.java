@@ -149,7 +149,7 @@ public class JavaParserUtil {
     private static Stream<MethodDeclaration> getPublicMethodsFromClassOrInterface(ClassOrInterfaceDeclaration classOrInterface) {
         if (classOrInterface.isInterface() && classOrInterface.isPublic()) {
             return classOrInterface.getMethods().stream();
-        } else if (classOrInterface.isTopLevelType() && classOrInterface.isPublic()) { // a public class
+        } else if (classOrInterface.isPublic() && (classOrInterface.isTopLevelType() || classOrInterface.isInnerClass())) { // a public class
             return Stream.concat(
                     classOrInterface.getMethods().stream().filter(NodeWithPublicModifier::isPublic),
                     classOrInterface.getMembers() // all inner classes that are public
