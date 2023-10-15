@@ -61,7 +61,7 @@ public class JGitRepositoryFactory implements ProjectFactory {
             LOGGER.warn("Could not construct the git project as it's using an unsupported project type. Supported project types are {}", ProjectType.values());
         }
 
-        throw new IllegalStateException("Could not get the project");
+        throw new IllegalStateException("Could not get the project at file location '%s'".formatted(directory.getAbsolutePath()));
     }
 
     private ProjectType detectProjectType(File projectRoot) {

@@ -55,7 +55,7 @@ public class Main {
     public static void main(String[] args) throws URISyntaxException, MalformedURLException {
         /**
          * ALGORITHM STEPS:
-         * 1: Use RefactoringMiner to get all method-related refactorings
+         * 1: Use RefactoringMiner to get all method-related refactorings (all projects in parallel)
          * 2: For each library project
          * 2.1: Compute all public methods of library project
          * 2.2: Fetch 100 projects depending on library project
@@ -65,39 +65,66 @@ public class Main {
          * 3: Display results to console
          */
 
+        long startTimeScript = System.currentTimeMillis();
         LocalFileStorageService projectsToAnalyzeStorage = new LocalFileStorageService(ApplicationConfiguration.applicationAssetsBaseDirectory() + File.separator + "projects_to_analyze.txt", false);
         List<String> projectsToAnalyze = projectsToAnalyzeStorage.read().toList();
-        for (String projectToAnalyze : projectsToAnalyze) {
-            String[] split = projectToAnalyze.split(";");
+        Map<String, ProjectRefactoring> projectRefactorings = projectsToAnalyze
+                .parallelStream()
+                .collect(
+                        toMap(
+                                project -> project,
+                                project -> {
+                                    String[] split = project.split(";");
+                                    Artifact.Coordinate parentArtifact = Artifact.Coordinate.read(split[1]);
+                                    String startCommitId = split[2];
+                                    String endCommitId = split[3];
+                                    try {
+                                        GitRepository parentProject = new JGitRepositoryFactory().createProject(split[0], new File(ApplicationConfiguration.applicationAllProjectsLocation() + File.separator + parentArtifact));
+
+                                        CacheService<ProjectRefactoring> projectRefactoringCacheService = new MultiFileCacheService<>(CacheLocation.PROJECT_REFACTORINGS, new JacksonSerializationService(), ProjectRefactoring.class);
+                                        String projectRefactoringIdentifier = createProjectRefactoringIdentifier(parentArtifact.toString(), startCommitId, endCommitId);
+                                        Optional<ProjectRefactoring> projectRefactoring = projectRefactoringCacheService.get(projectRefactoringIdentifier);
+                                        Set<String> allRefactoredMethods = projectRefactoring
+                                                .orElseGet(() -> {
+                                                    Set<String> methodDeclarations = findAllRefactoredMethods(parentProject, startCommitId, endCommitId)
+                                                            .stream()
+                                                            .map(m -> {
+                                                                try {
+                                                                    ResolvedMethodDeclaration resolvedMethodDeclaration = m.resolve();
+                                                                    return resolvedMethodDeclaration.getQualifiedSignature();
+                                                                } catch (Exception e) {
+                                                                    LOGGER.warn("Could not resolve method {}", m.getNameAsString(), e);
+                                                                    return "";
+                                                                }
+                                                            })
+                                                            .filter(Predicate.not(String::isEmpty))
+                                                            .collect(Collectors.toSet());
+                                                    ProjectRefactoring refactoring = new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, methodDeclarations);
+                                                    projectRefactoringCacheService.write(refactoring);
+                                                    return refactoring;
+                                                })
+                                                .refactoredMethods();
+                                        LOGGER.info("Finished computing refactored methods for project {} between commits {} and {}", parentArtifact, startCommitId, endCommitId);
+                                        return new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, allRefactoredMethods);
+                                    } catch (Exception e) {
+                                        LOGGER.error("Could not compute refactored methods for project {}", parentArtifact, e);
+                                        return new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, new HashSet<>());
+                                    }
+                                }));
+
+        LOGGER.info("Finished computing refactored methods for all projects");
+
+        for (Map.Entry<String, ProjectRefactoring> projectToAnalyze : projectRefactorings.entrySet()) {
+            long startTime = System.currentTimeMillis();
+            String projectCoordinate = projectToAnalyze.getKey();
+            String[] split = projectCoordinate.split(";");
+            String startCommitId = split[2];
             Artifact.Coordinate parentArtifact = Artifact.Coordinate.read(split[1]);
+            LOGGER.info("Starting to analyze project {}", parentArtifact);
             GitRepository parentProject = new JGitRepositoryFactory().createProject(split[0], new File(ApplicationConfiguration.applicationAllProjectsLocation() + File.separator + parentArtifact));
-//        ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(createProjectLocation(parentArtifact).getAbsolutePath());
 
             // refactoring between two commits
-            CacheService<ProjectRefactoring> projectRefactoringCacheService = new MultiFileCacheService<>(CacheLocation.PROJECT_REFACTORINGS, new JacksonSerializationService(), ProjectRefactoring.class);
-            String startCommitId = split[2];
-            String endCommitId = split[3];
-            String projectRefactoringIdentifier = startCommitId + endCommitId;
-            Optional<ProjectRefactoring> projectRefactoring = projectRefactoringCacheService.get(projectRefactoringIdentifier);
-            Set<String> allRefactoredMethods = projectRefactoring
-                    .orElseGet(() -> {
-                        Set<String> methodDeclarations = findAllRefactoredMethods(parentProject, startCommitId, endCommitId)
-                                .stream()
-                                .map(m -> {
-                                    try {
-                                        ResolvedMethodDeclaration resolvedMethodDeclaration = m.resolve();
-                                        return resolvedMethodDeclaration.getQualifiedSignature();
-                                    } catch (Exception e) {
-                                        LOGGER.warn("Could not resolve method {}", m.getNameAsString(), e);
-                                        return "";
-                                    }
-                                })
-                                .filter(Predicate.not(String::isEmpty))
-                                .collect(Collectors.toSet());
-                        projectRefactoringCacheService.write(new ProjectRefactoring(startCommitId, endCommitId, methodDeclarations));
-                        return new ProjectRefactoring(startCommitId, endCommitId, methodDeclarations);
-                    })
-                    .refactoredMethods();
+            Set<String> allRefactoredMethods = projectToAnalyze.getValue().refactoredMethods();
 
             //dependents
             List<GitRepository> dependents = getDependentRepositories(parentArtifact, 100);
@@ -138,23 +165,32 @@ public class Main {
             parentProject.checkout(startCommitId);
             List<MethodUsages> usages = projectQuery.mostUsedMethods(parentProject, dependents);
             Set<String> usedMethodsRefactored = usages.stream().filter(method -> method.usages() > 0 && allRefactoredMethods.contains(method.fullyQualifiedSignature())).map(MethodUsages::fullyQualifiedSignature).collect(Collectors.toSet());
-
+            long endTime = System.currentTimeMillis();
             LocalFileStorageService pipelineResultStorage = new LocalFileStorageService(CacheLocation.PIPELINE_RESULTS + File.separator + parentArtifact + "-" + System.currentTimeMillis(), true);
             SerializationService serializationService = new JacksonSerializationService();
             pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored))));
+            LOGGER.info("Finished analyzing project {}", parentArtifact);
+            LOGGER.info("It took {} minutes to analyze the project", (endTime - startTime) / 60000);
         }
+
+        long endTimeScript = System.currentTimeMillis();
+        LOGGER.info("Script finished in {} minutes", (endTimeScript - startTimeScript) / 60000);
+    }
+
+    private static String createProjectRefactoringIdentifier(String projectId, String startCommitId, String endCommitId) {
+        return projectId + "_" + startCommitId + endCommitId;
     }
 
     private record PipelineResult(List<MethodUsages> methodUsages, Set<String> refactoredMethodsUsedByDependents) {
     }
 
     @JsonIgnoreProperties({"id"})
-    private record ProjectRefactoring(String startCommitId, String endCommitId,
+    private record ProjectRefactoring(String projectId, String startCommitId, String endCommitId,
                                       Set<String> refactoredMethods) implements Identifiable {
 
         @Override
         public String getId() {
-            return startCommitId + endCommitId;
+            return createProjectRefactoringIdentifier(projectId, startCommitId, endCommitId);
         }
     }
 
@@ -167,6 +203,7 @@ public class Main {
     }
 
     private static List<MethodDeclaration> findAllRefactoredMethods(GitRepository gitRepository, String startCommitId, String endCommitId) {
+        LOGGER.info("Finding all refactored methods");
         RefactoringDetector refactoringDetector = new RefactoringMinerRefactoringDetector();
         Collection<Refactoring> refactorings = refactoringDetector.detectRefactoringBetweenCommit(gitRepository, startCommitId, endCommitId, Set.of(RefactoringType.METHOD_NAME, RefactoringType.METHOD_SIGNATURE));
         Map<String, List<Refactoring>> refactoringsByCommitMap = refactorings.stream().collect(Collectors.groupingBy(Refactoring::commitId));
@@ -183,6 +220,7 @@ public class Main {
     }
 
     private static List<CompilationUnit> getRefactoredClasses(GitRepository gitRepository, Map<String, List<Refactoring>> refactoringsByCommitMap) {
+        LOGGER.info("Computing refactored classes");
         return refactoringsByCommitMap
                 .entrySet()
                 .stream()
@@ -194,6 +232,7 @@ public class Main {
     }
 
     private static List<MethodDeclaration> getRefactoredMethods(Collection<Refactoring> refactorings, List<ClassOrInterfaceDeclaration> refactoredClasses) {
+        LOGGER.info("Computing refactored methods");
         return refactoredClasses
                 .stream()
                 .flatMap(c ->
@@ -231,6 +270,7 @@ public class Main {
     }
 
     private static List<GitRepository> getDependentRepositories(Artifact.Coordinate parentArtifact, int desiredRepositories) {
+        LOGGER.info("Fetching 100 dependent repositories of project {}", parentArtifact);
         ArtifactRepository artifactRepository = new MavenCentralRepository();
         JGitRepositoryFactory factory = new JGitRepositoryFactory();
 
@@ -241,15 +281,16 @@ public class Main {
                 .discover()
                 .filter(GitRepository.class::isInstance)
                 .map(GitRepository.class::cast)
-                .toList();
+                .collect(Collectors.toList());
 
         if (!repositories.isEmpty()) {
             return repositories;
         }
 
         int retries = 0;
+        Random randomDelay = new Random();
         while (repositories.size() <= desiredRepositories) {
-            List<Artifact> artifacts = artifactRepository.getArtifactUsages(parentArtifact, new ArtifactRepository.PageOptions(page, 200), new ArtifactRepository.FilterOptions(true));
+            List<Artifact> artifacts = artifactRepository.getArtifactUsages(parentArtifact, new ArtifactRepository.PageOptions(page, 10), new ArtifactRepository.FilterOptions(true));
             if (artifacts.isEmpty()) {
                 LOGGER.info("No more artifacts could be found at page {}. Total usable projects: {}.", page, repositories.size());
                 if (retries >= 3) {
@@ -273,8 +314,16 @@ public class Main {
                     .filter(Objects::nonNull)
                     .forEach(repositories::add);
             page++;
+            try {
+                int delayInMs = randomDelay.nextInt(2000) + 1000;
+                LOGGER.info("Sleeping for {} ms", delayInMs);
+                Thread.sleep(delayInMs);
+            } catch (InterruptedException e) {
+                LOGGER.warn("Could not sleep for {} ms", randomDelay);
+            }
         }
 
+        LOGGER.info("Finished fetching dependent repositories. Found {} dependent projects", repositories.size());
         return repositories;
     }
 
