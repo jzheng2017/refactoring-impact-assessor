@@ -1,7 +1,6 @@
 package nl.jiankai.refactoring.core.project;
 
 import nl.jiankai.refactoring.configuration.ApplicationConfiguration;
-import nl.jiankai.refactoring.core.project.git.JGitRepositoryFactory;
 import nl.jiankai.refactoring.tasks.ScheduledTask;
 import nl.jiankai.refactoring.tasks.ScheduledTaskExecutorService;
 import org.slf4j.Logger;
@@ -28,7 +27,7 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
     @Override
     public Stream<Project> discover() {
         try {
-            createProjectDirectoryIfMissing();
+            createDirectoryIfMissing(ApplicationConfiguration.applicationAllProjectsLocation());
             return executorService.executeTask(
                             ScheduledTask
                                     .builder((Class<Stream<Project>>) null)
@@ -42,6 +41,7 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
     }
 
     private Stream<Project> scan() {
+        createDirectoryIfMissing(locationToScan);
         return getAllSubDirectories(locationToScan)
                 .stream()
                 .filter(file -> file.isDirectory() && !file.getName().startsWith("."))
@@ -63,8 +63,8 @@ public final class LocalFileProjectDiscovery implements ProjectDiscovery {
                 ).toList();
     }
 
-    private void createProjectDirectoryIfMissing() {
-        File projectDirectory = new File(ApplicationConfiguration.applicationAllProjectsLocation());
+    private void createDirectoryIfMissing(String location) {
+        File projectDirectory = new File(location);
 
         if (!projectDirectory.exists()) {
             String projectPath = projectDirectory.getAbsolutePath();

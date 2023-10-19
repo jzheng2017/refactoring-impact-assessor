@@ -20,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class MavenCentralRepository implements ArtifactRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(MavenCentralRepository.class);
@@ -29,6 +30,7 @@ public class MavenCentralRepository implements ArtifactRepository {
     @Override
     public Optional<Artifact> getArtifact(Artifact.Coordinate coordinate) {
         try {
+            LOGGER.info("Fetching artifact information for {}", coordinate);
             Document document = Jsoup.connect("https://central.sonatype.com/artifact/%s/%s/%s".formatted(coordinate.groupId(), coordinate.artifactId(), coordinate.version())).get();
             Elements elements = document.getElementsByAttributeValue("data-test", "scm-url");
             if (!elements.isEmpty()) {
@@ -46,13 +48,16 @@ public class MavenCentralRepository implements ArtifactRepository {
     }
 
     private String stripUnnecessaryPart(String githubLink) {
+        if (githubLink == null) {
+            return null;
+        }
+
         if (githubLink.startsWith("scm@")) {
             githubLink = githubLink.substring("scm@".length());
             githubLink = !githubLink.startsWith("http://") ? "http://" + githubLink : githubLink;
         } else if (githubLink.startsWith("scm:git@")) {
             githubLink = githubLink.substring("scm:git@".length());
             githubLink = !githubLink.startsWith("http://") ? "http://" + githubLink : githubLink;
-
         }
 
         githubLink = githubLink.replace(".git", "");
@@ -63,9 +68,14 @@ public class MavenCentralRepository implements ArtifactRepository {
 
     @Override
     public List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions, FilterOptions filterOptions) {
+        List<Artifact> artifacts = new ArrayList<>();
         try {
-            Set<GroupAndArtifactId> alreadyFoundArtifacts = new HashSet<>();
-            List<Artifact> artifacts = new ArrayList<>();
+            Set<GroupAndArtifactId> alreadyFoundArtifacts =
+                    filterOptions
+                            .ignoreArtifacts()
+                            .stream()
+                            .map(artifact -> new GroupAndArtifactId(artifact.groupId(), artifact.artifactId()))
+                            .collect(Collectors.toSet());
             String body = post(coordinate, pageOptions);
             Map<String, Object> usages = serializationService.read(body.getBytes());
             List<Map<String, String>> components = (List<Map<String, String>>) usages.get("components");
@@ -100,14 +110,17 @@ public class MavenCentralRepository implements ArtifactRepository {
                             alreadyFoundArtifacts.add(groupAndArtifactId);
                         } else {
                             LOGGER.info("Skipped: Artifact '{}' has already been added", groupAndArtifactId);
+                            artifacts.add(new Artifact(new Artifact.Coordinate("", "", ""), null)); //to indicate there were artifacts found but not usable to make the script keep running
                         }
+                    } else {
+                        artifacts.add(new Artifact(new Artifact.Coordinate("", "", ""), null)); //to indicate there were artifacts found but not usable to make the script keep running
                     }
                 }
             }
             return artifacts.stream().map(artifact -> new Artifact(artifact.coordinate(), stripUnnecessaryPart(artifact.sourceControlUrl()))).toList();
         } catch (Exception e) {
             LOGGER.error("Something went wrong", e);
-            return new ArrayList<>();
+            return artifacts;
         }
     }
 
@@ -115,7 +128,7 @@ public class MavenCentralRepository implements ArtifactRepository {
         String url = "https://central.sonatype.com/api/internal/browse/dependents";
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(1))
+                .timeout(Duration.ofMinutes(1))
                 .headers(
                         "Content-Type", "application/json",
                         "Accept", "*/*",

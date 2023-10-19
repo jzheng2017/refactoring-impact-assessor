@@ -36,23 +36,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.reducing;
-import static java.util.stream.Collectors.toMap;
+import static java.util.stream.Collectors.*;
 
 public class Main {
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
-    private static final String baseLocation = ApplicationConfiguration.applicationAllProjectsLocation();
-
-    public static void main(String[] args) throws URISyntaxException, MalformedURLException {
+    public static void main(String[] args) {
         /**
          * ALGORITHM STEPS:
          * 1: Use RefactoringMiner to get all method-related refactorings (all projects in parallel)
@@ -64,14 +60,20 @@ public class Main {
          * 2.5: Write results to file
          * 3: Display results to console
          */
+        if (args.length == 0 || args[0] == null || args[0].isEmpty()) {
+            throw new IllegalArgumentException("No path was provided in the args");
+        }
+
+        ApplicationConfiguration.applicationAssetsBaseDirectory = args[0];
 
         long startTimeScript = System.currentTimeMillis();
         LocalFileStorageService projectsToAnalyzeStorage = new LocalFileStorageService(ApplicationConfiguration.applicationAssetsBaseDirectory() + File.separator + "projects_to_analyze.txt", false);
         List<String> projectsToAnalyze = projectsToAnalyzeStorage.read().toList();
+        AtomicInteger projectsRefactoringFinishedComputing = new AtomicInteger();
         Map<String, ProjectRefactoring> projectRefactorings = projectsToAnalyze
                 .parallelStream()
                 .collect(
-                        toMap(
+                        toConcurrentMap(
                                 project -> project,
                                 project -> {
                                     String[] split = project.split(";");
@@ -105,9 +107,11 @@ public class Main {
                                                 })
                                                 .refactoredMethods();
                                         LOGGER.info("Finished computing refactored methods for project {} between commits {} and {}", parentArtifact, startCommitId, endCommitId);
+                                        LOGGER.info("{} out of {} projects finished", projectsRefactoringFinishedComputing.incrementAndGet(), projectsToAnalyze.size());
                                         return new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, allRefactoredMethods);
                                     } catch (Exception e) {
                                         LOGGER.error("Could not compute refactored methods for project {}", parentArtifact, e);
+                                        LOGGER.info("{} out of {} projects finished", projectsRefactoringFinishedComputing.incrementAndGet(), projectsToAnalyze.size());
                                         return new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, new HashSet<>());
                                     }
                                 }));
@@ -127,7 +131,7 @@ public class Main {
             Set<String> allRefactoredMethods = projectToAnalyze.getValue().refactoredMethods();
 
             //dependents
-            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 100);
+            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 40);
             JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
             Dependency dependency = toDependency(parentArtifact);
             Map<GitRepository, Optional<String>> projects = dependents
@@ -168,7 +172,7 @@ public class Main {
             long endTime = System.currentTimeMillis();
             LocalFileStorageService pipelineResultStorage = new LocalFileStorageService(CacheLocation.PIPELINE_RESULTS + File.separator + parentArtifact + "-" + System.currentTimeMillis(), true);
             SerializationService serializationService = new JacksonSerializationService();
-            pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored))));
+            pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored, dependents.size()))));
             LOGGER.info("Finished analyzing project {}", parentArtifact);
             LOGGER.info("It took {} minutes to analyze the project", (endTime - startTime) / 60000);
         }
@@ -181,7 +185,7 @@ public class Main {
         return projectId + "_" + startCommitId + endCommitId;
     }
 
-    private record PipelineResult(List<MethodUsages> methodUsages, Set<String> refactoredMethodsUsedByDependents) {
+    private record PipelineResult(List<MethodUsages> methodUsages, Set<String> refactoredMethodsUsedByDependents, int projectsAnalyzed) {
     }
 
     @JsonIgnoreProperties({"id"})
@@ -225,8 +229,13 @@ public class Main {
                 .entrySet()
                 .stream()
                 .flatMap(entry -> {
-                    gitRepository.checkout(entry.getKey());
-                    return JavaParserUtil.getClasses(gitRepository, entry.getValue().stream().map(Refactoring::filePath).toList()).stream();
+                    try {
+                        gitRepository.checkout(entry.getKey());
+                        return JavaParserUtil.getClasses(gitRepository, entry.getValue().stream().map(Refactoring::filePath).toList()).stream();
+                    } catch (Exception e) {
+                        LOGGER.error("Could not checkout commit {}", entry.getKey(), e);
+                        return Stream.empty();
+                    }
                 })
                 .toList();
     }
@@ -270,7 +279,7 @@ public class Main {
     }
 
     private static List<GitRepository> getDependentRepositories(Artifact.Coordinate parentArtifact, int desiredRepositories) {
-        LOGGER.info("Fetching 100 dependent repositories of project {}", parentArtifact);
+        LOGGER.info("Fetching {} dependent repositories of project {}", desiredRepositories, parentArtifact);
         ArtifactRepository artifactRepository = new MavenCentralRepository();
         JGitRepositoryFactory factory = new JGitRepositoryFactory();
 
@@ -283,14 +292,30 @@ public class Main {
                 .map(GitRepository.class::cast)
                 .collect(Collectors.toList());
 
-        if (!repositories.isEmpty()) {
+        if (repositories.size() >= desiredRepositories) {
             return repositories;
         }
 
         int retries = 0;
         Random randomDelay = new Random();
         while (repositories.size() <= desiredRepositories) {
-            List<Artifact> artifacts = artifactRepository.getArtifactUsages(parentArtifact, new ArtifactRepository.PageOptions(page, 10), new ArtifactRepository.FilterOptions(true));
+            List<Artifact> artifacts = artifactRepository.getArtifactUsages(
+                    parentArtifact,
+                    new ArtifactRepository.PageOptions(page, 200),
+                    new ArtifactRepository.FilterOptions(
+                            true,
+                            repositories
+                                    .stream()
+                                    .map(
+                                            repo -> {
+                                                try {
+                                                    return toCoordinate(repo.getProjectVersion().coordinate());
+                                                } catch (Exception e) {
+                                                    return null;
+                                                }
+                                            })
+                                    .filter(Objects::nonNull)
+                                    .collect(toSet())));
             if (artifacts.isEmpty()) {
                 LOGGER.info("No more artifacts could be found at page {}. Total usable projects: {}.", page, repositories.size());
                 if (retries >= 3) {
@@ -298,14 +323,21 @@ public class Main {
                 } else {
                     retries++;
                 }
+            } else {
+                retries = 0;
             }
+
             artifacts
-                    .stream()
+                    .parallelStream()
                     .filter(distinctByKey(artifact -> artifact.coordinate().groupId() + "-" + artifact.coordinate().artifactId()))
-                    .parallel()
                     .map(artifact -> {
                         try {
-                            return factory.createProject(artifact.sourceControlUrl(), new File(artifactLocation.getAbsolutePath() + File.separator + artifact.getId()));
+                            if (artifact.sourceControlUrl() != null) {
+                                return factory.createProject(artifact.sourceControlUrl(), new File(artifactLocation.getAbsolutePath() + File.separator + artifact.getId()));
+                            } else {
+                                LOGGER.warn("No source control url for artifact {}", artifact);
+                                return null;
+                            }
                         } catch (Exception e) {
                             LOGGER.warn("Could not create project '{}'", artifact.getId(), e);
                             return null;
@@ -313,6 +345,7 @@ public class Main {
                     })
                     .filter(Objects::nonNull)
                     .forEach(repositories::add);
+            LOGGER.info("{} projects collected so far", repositories.size());
             page++;
             try {
                 int delayInMs = randomDelay.nextInt(2000) + 1000;

@@ -1,7 +1,7 @@
 package nl.jiankai.refactoring.configuration;
 
 public class ApplicationConfiguration {
-    private static final String applicationAssetsBaseDirectory = "/home/jiankai/Documents/refactoring-storage";
+    public static String applicationAssetsBaseDirectory = "/home/jiankai/Documents/refactoring-storage";
 
     public static String applicationAssetsBaseDirectory() {
         return applicationAssetsBaseDirectory;

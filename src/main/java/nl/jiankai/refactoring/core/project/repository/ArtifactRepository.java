@@ -2,6 +2,7 @@ package nl.jiankai.refactoring.core.project.repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * An interface allowing you to talk to a local/remote artifact repository, retrieving various information such as artifacts information.
@@ -24,5 +25,5 @@ public interface ArtifactRepository {
     List<Artifact> getArtifactUsages(Artifact.Coordinate coordinate, PageOptions pageOptions, FilterOptions filterOptions);
 
     record PageOptions(int page, int pageSize){}
-    record FilterOptions(boolean ignoreSameArtifact){}
+    record FilterOptions(boolean ignoreSameArtifact, Set<Artifact.Coordinate> ignoreArtifacts){}
 }
