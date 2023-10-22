@@ -1,5 +1,5 @@
 https://github.com/brettwooldridge/HikariCP;com.zaxxer/HikariCP/3.2.0;ad827db;8c1a7c2
-https://github.com/apache/httpcomponents-client;org.apache.httpcomponents.client5/httpclient5/5.1.3;64d662d;19f3922
+https://github.com/FasterXML/jackson-core;com.fasterxml.jackson.core/jackson-core/2.15.2;1fe0290;9b666b2
 https://github.com/rabbitmq/rabbitmq-java-client;com.rabbitmq/amqp-client/5.16.0;8d94689;d96b869
 https://github.com/apache/commons-codec;commons-codec/commons-codec/1.11;9ceef22;63556c8
 https://github.com/google/guava;com.google.guava/guava/31.1-jre;0a17f4a;cc3ed44

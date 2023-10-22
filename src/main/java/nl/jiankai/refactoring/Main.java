@@ -129,7 +129,7 @@ public class Main {
             Set<String> allRefactoredMethods = projectToAnalyze.getValue().refactoredMethods();
 
             //dependents
-            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 100);
+            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 200);
             JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
             Dependency dependency = toDependency(parentArtifact);
             Map<GitRepository, Optional<String>> projects = dependents
@@ -146,15 +146,17 @@ public class Main {
                     .stream()
                     .filter(entry -> {
                         Optional<String> commit = entry.getValue();
+                        GitRepository repo = entry.getKey();
                         if (commit.isPresent()) {
-                            GitRepository repo = entry.getKey();
                             try {
                                 repo.checkout(commit.get());
                             } catch (Exception e) {
+                                removeProject(repo.getLocalPath());
                                 return false;
                             }
                             return true;
                         } else {
+                            removeProject(repo.getLocalPath());
                             return false;
                         }
                     })
@@ -348,12 +350,7 @@ public class Main {
                             }
                         } catch (Exception e) {
                             LOGGER.warn("Could not create project '{}'", artifact.getId(), e);
-                            try {
-                                LOGGER.info("Project '{}' is unusable and will be removed", directory.getName());
-                                FileUtils.deleteDirectory(directory);
-                            } catch (IOException ioe) {
-                                LOGGER.info("Could not remove project '{}'", directory.getName(), ioe);
-                            }
+                            removeProject(directory);
                             return null;
                         }
                     })
@@ -372,6 +369,15 @@ public class Main {
 
         LOGGER.info("Finished fetching dependent repositories. Found {} dependent projects", repositories.size());
         return repositories;
+    }
+
+    private static void removeProject(File directory) {
+        try {
+            LOGGER.info("Project '{}' is unusable and will be removed", directory.getName());
+            FileUtils.deleteDirectory(directory);
+        } catch (IOException ioe) {
+            LOGGER.info("Could not remove project '{}'", directory.getName(), ioe);
+        }
     }
 
 }
