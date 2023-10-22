@@ -5,6 +5,7 @@ import nl.jiankai.refactoring.core.project.maven.MavenProjectFactory;
 import nl.jiankai.refactoring.core.project.Project;
 import nl.jiankai.refactoring.core.project.ProjectFactory;
 import nl.jiankai.refactoring.util.FileUtil;
+import org.apache.commons.io.FileUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.URIish;
@@ -34,7 +35,6 @@ public class JGitRepositoryFactory implements ProjectFactory {
         }
 
         if (validGitRepository(repositoryUrl)) {
-
             try (Git git = Git.cloneRepository()
                     .setTimeout(30)
                     .setURI(repositoryUrl)

@@ -60,6 +60,10 @@ public class MavenCentralRepository implements ArtifactRepository {
             githubLink = !githubLink.startsWith("http://") ? "http://" + githubLink : githubLink;
         }
 
+        if (githubLink.endsWith("/tree/master")) {
+            githubLink = githubLink.replace("/tree/master", "");
+        }
+
         githubLink = githubLink.replace(".git", "");
         githubLink = githubLink.replaceAll(".com:", ".com/");
 

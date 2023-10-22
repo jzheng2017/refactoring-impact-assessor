@@ -32,10 +32,12 @@ import nl.jiankai.refactoring.core.storage.filestorage.MultiFileCacheService;
 import nl.jiankai.refactoring.serialisation.JacksonSerializationService;
 import nl.jiankai.refactoring.serialisation.SerializationService;
 import nl.jiankai.refactoring.util.JavaParserUtil;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,6 +50,7 @@ import static java.util.stream.Collectors.*;
 
 public class Main {
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+
     public static void main(String[] args) {
         /**
          * ALGORITHM STEPS:
@@ -60,11 +63,6 @@ public class Main {
          * 2.5: Write results to file
          * 3: Display results to console
          */
-        if (args.length == 0 || args[0] == null || args[0].isEmpty()) {
-            throw new IllegalArgumentException("No path was provided in the args");
-        }
-
-        ApplicationConfiguration.applicationAssetsBaseDirectory = args[0];
 
         long startTimeScript = System.currentTimeMillis();
         LocalFileStorageService projectsToAnalyzeStorage = new LocalFileStorageService(ApplicationConfiguration.applicationAssetsBaseDirectory() + File.separator + "projects_to_analyze.txt", false);
@@ -131,7 +129,7 @@ public class Main {
             Set<String> allRefactoredMethods = projectToAnalyze.getValue().refactoredMethods();
 
             //dependents
-            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 40);
+            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 100);
             JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
             Dependency dependency = toDependency(parentArtifact);
             Map<GitRepository, Optional<String>> projects = dependents
@@ -172,9 +170,10 @@ public class Main {
             long endTime = System.currentTimeMillis();
             LocalFileStorageService pipelineResultStorage = new LocalFileStorageService(CacheLocation.PIPELINE_RESULTS + File.separator + parentArtifact + "-" + System.currentTimeMillis(), true);
             SerializationService serializationService = new JacksonSerializationService();
-            pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored, dependents.size()))));
+            long analysisDurationMs = endTime - startTime;
+            pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored, dependents.size(), analysisDurationMs))));
             LOGGER.info("Finished analyzing project {}", parentArtifact);
-            LOGGER.info("It took {} minutes to analyze the project", (endTime - startTime) / 60000);
+            LOGGER.info("It took {} minutes to analyze the project", analysisDurationMs / 60000);
         }
 
         long endTimeScript = System.currentTimeMillis();
@@ -185,7 +184,8 @@ public class Main {
         return projectId + "_" + startCommitId + endCommitId;
     }
 
-    private record PipelineResult(List<MethodUsages> methodUsages, Set<String> refactoredMethodsUsedByDependents, int projectsAnalyzed) {
+    private record PipelineResult(List<MethodUsages> methodUsages, Set<String> refactoredMethodsUsedByDependents,
+                                  int projectsAnalyzed, long analysisDurationMs) {
     }
 
     @JsonIgnoreProperties({"id"})
@@ -284,6 +284,7 @@ public class Main {
         JGitRepositoryFactory factory = new JGitRepositoryFactory();
 
         int page = 0;
+        int pageSize = 200;
         File artifactLocation = createProjectLocation(parentArtifact);
         ProjectDiscovery projectDiscovery = new LocalFileProjectDiscovery(artifactLocation.getAbsolutePath());
         List<GitRepository> repositories = projectDiscovery
@@ -301,7 +302,7 @@ public class Main {
         while (repositories.size() <= desiredRepositories) {
             List<Artifact> artifacts = artifactRepository.getArtifactUsages(
                     parentArtifact,
-                    new ArtifactRepository.PageOptions(page, 200),
+                    new ArtifactRepository.PageOptions(page, pageSize),
                     new ArtifactRepository.FilterOptions(
                             true,
                             repositories
@@ -319,7 +320,13 @@ public class Main {
             if (artifacts.isEmpty()) {
                 LOGGER.info("No more artifacts could be found at page {}. Total usable projects: {}.", page, repositories.size());
                 if (retries >= 3) {
-                    break;
+                    if (pageSize <= 10) {
+                        break;
+                    } else { //try whether smaller page size will be accepted
+                        page -= 3;
+                        pageSize /= 2;
+                        retries = 0;
+                    }
                 } else {
                     retries++;
                 }
@@ -331,15 +338,22 @@ public class Main {
                     .parallelStream()
                     .filter(distinctByKey(artifact -> artifact.coordinate().groupId() + "-" + artifact.coordinate().artifactId()))
                     .map(artifact -> {
+                        File directory = new File(artifactLocation.getAbsolutePath() + File.separator + artifact.getId());
                         try {
                             if (artifact.sourceControlUrl() != null) {
-                                return factory.createProject(artifact.sourceControlUrl(), new File(artifactLocation.getAbsolutePath() + File.separator + artifact.getId()));
+                                return factory.createProject(artifact.sourceControlUrl(), directory);
                             } else {
                                 LOGGER.warn("No source control url for artifact {}", artifact);
                                 return null;
                             }
                         } catch (Exception e) {
                             LOGGER.warn("Could not create project '{}'", artifact.getId(), e);
+                            try {
+                                LOGGER.info("Project '{}' is unusable and will be removed", directory.getName());
+                                FileUtils.deleteDirectory(directory);
+                            } catch (IOException ioe) {
+                                LOGGER.info("Could not remove project '{}'", directory.getName(), ioe);
+                            }
                             return null;
                         }
                     })
