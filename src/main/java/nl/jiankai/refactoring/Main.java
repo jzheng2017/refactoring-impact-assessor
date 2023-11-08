@@ -65,9 +65,18 @@ public class Main {
          */
 
         long startTimeScript = System.currentTimeMillis();
-        LocalFileStorageService projectsToAnalyzeStorage = new LocalFileStorageService(ApplicationConfiguration.applicationAssetsBaseDirectory() + File.separator + "projects_to_analyze.txt", false);
-        List<String> projectsToAnalyze = projectsToAnalyzeStorage.read().toList();
+        List<String> projectsToAnalyze = new ArrayList<>();
         AtomicInteger projectsRefactoringFinishedComputing = new AtomicInteger();
+
+        if (args.length > 0) {
+            projectsToAnalyze.add(args[0]);
+        } else {
+            LocalFileStorageService projectsToAnalyzeStorage = new LocalFileStorageService(ApplicationConfiguration.applicationAssetsBaseDirectory() + File.separator + "projects_to_analyze.txt", false);
+            projectsToAnalyze = projectsToAnalyzeStorage.read().toList();
+        }
+
+        LOGGER.warn("Starting script");
+        List<String> finalProjectsToAnalyze = projectsToAnalyze;
         Map<String, ProjectRefactoring> projectRefactorings = projectsToAnalyze
                 .parallelStream()
                 .collect(
@@ -105,16 +114,16 @@ public class Main {
                                                 })
                                                 .refactoredMethods();
                                         LOGGER.info("Finished computing refactored methods for project {} between commits {} and {}", parentArtifact, startCommitId, endCommitId);
-                                        LOGGER.info("{} out of {} projects finished", projectsRefactoringFinishedComputing.incrementAndGet(), projectsToAnalyze.size());
+                                        LOGGER.info("{} out of {} projects finished", projectsRefactoringFinishedComputing.incrementAndGet(), finalProjectsToAnalyze.size());
                                         return new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, allRefactoredMethods);
                                     } catch (Exception e) {
                                         LOGGER.error("Could not compute refactored methods for project {}", parentArtifact, e);
-                                        LOGGER.info("{} out of {} projects finished", projectsRefactoringFinishedComputing.incrementAndGet(), projectsToAnalyze.size());
+                                        LOGGER.info("{} out of {} projects finished", projectsRefactoringFinishedComputing.incrementAndGet(), finalProjectsToAnalyze.size());
                                         return new ProjectRefactoring(parentArtifact.toString(), startCommitId, endCommitId, new HashSet<>());
                                     }
                                 }));
 
-        LOGGER.info("Finished computing refactored methods for all projects");
+        LOGGER.warn("Finished computing refactored methods for all projects");
 
         for (Map.Entry<String, ProjectRefactoring> projectToAnalyze : projectRefactorings.entrySet()) {
             long startTime = System.currentTimeMillis();
@@ -122,7 +131,7 @@ public class Main {
             String[] split = projectCoordinate.split(";");
             String startCommitId = split[2];
             Artifact.Coordinate parentArtifact = Artifact.Coordinate.read(split[1]);
-            LOGGER.info("Starting to analyze project {}", parentArtifact);
+            LOGGER.warn("Starting to analyze project {}", parentArtifact);
             GitRepository parentProject = new JGitRepositoryFactory().createProject(split[0], new File(ApplicationConfiguration.applicationAllProjectsLocation() + File.separator + parentArtifact));
 
             // refactoring between two commits
@@ -174,12 +183,12 @@ public class Main {
             SerializationService serializationService = new JacksonSerializationService();
             long analysisDurationMs = endTime - startTime;
             pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored, dependents.size(), analysisDurationMs))));
-            LOGGER.info("Finished analyzing project {}", parentArtifact);
-            LOGGER.info("It took {} minutes to analyze the project", analysisDurationMs / 60000);
+            LOGGER.warn("Finished analyzing project {}", parentArtifact);
+            LOGGER.warn("It took {} minutes to analyze the project", analysisDurationMs / 60000);
         }
 
         long endTimeScript = System.currentTimeMillis();
-        LOGGER.info("Script finished in {} minutes", (endTimeScript - startTimeScript) / 60000);
+        LOGGER.warn("Script finished in {} minutes", (endTimeScript - startTimeScript) / 60000);
     }
 
     private static String createProjectRefactoringIdentifier(String projectId, String startCommitId, String endCommitId) {
