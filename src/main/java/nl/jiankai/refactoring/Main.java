@@ -75,7 +75,7 @@ public class Main {
             projectsToAnalyze = projectsToAnalyzeStorage.read().toList();
         }
 
-        LOGGER.warn("Starting script");
+        LOGGER.info("Starting script");
         List<String> finalProjectsToAnalyze = projectsToAnalyze;
         Map<String, ProjectRefactoring> projectRefactorings = projectsToAnalyze
                 .parallelStream()
@@ -123,7 +123,7 @@ public class Main {
                                     }
                                 }));
 
-        LOGGER.warn("Finished computing refactored methods for all projects");
+        LOGGER.info("Finished computing refactored methods for all projects");
 
         for (Map.Entry<String, ProjectRefactoring> projectToAnalyze : projectRefactorings.entrySet()) {
             long startTime = System.currentTimeMillis();
@@ -131,14 +131,14 @@ public class Main {
             String[] split = projectCoordinate.split(";");
             String startCommitId = split[2];
             Artifact.Coordinate parentArtifact = Artifact.Coordinate.read(split[1]);
-            LOGGER.warn("Starting to analyze project {}", parentArtifact);
+            LOGGER.info("Starting to analyze project {}", parentArtifact);
             GitRepository parentProject = new JGitRepositoryFactory().createProject(split[0], new File(ApplicationConfiguration.applicationAllProjectsLocation() + File.separator + parentArtifact));
 
             // refactoring between two commits
             Set<String> allRefactoredMethods = projectToAnalyze.getValue().refactoredMethods();
 
             //dependents
-            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 200);
+            List<GitRepository> dependents = getDependentRepositories(parentArtifact, 35);
             JGitProjectQuery gitProjectQuery = new JGitProjectQuery();
             Dependency dependency = toDependency(parentArtifact);
             Map<GitRepository, Optional<String>> projects = dependents
@@ -183,12 +183,12 @@ public class Main {
             SerializationService serializationService = new JacksonSerializationService();
             long analysisDurationMs = endTime - startTime;
             pipelineResultStorage.write(new String(serializationService.serialize(new PipelineResult(usages, usedMethodsRefactored, dependents.size(), analysisDurationMs))));
-            LOGGER.warn("Finished analyzing project {}", parentArtifact);
-            LOGGER.warn("It took {} minutes to analyze the project", analysisDurationMs / 60000);
+            LOGGER.info("Finished analyzing project {}", parentArtifact);
+            LOGGER.info("It took {} minutes to analyze the project", analysisDurationMs / 60000);
         }
 
         long endTimeScript = System.currentTimeMillis();
-        LOGGER.warn("Script finished in {} minutes", (endTimeScript - startTimeScript) / 60000);
+        LOGGER.info("Script finished in {} minutes", (endTimeScript - startTimeScript) / 60000);
     }
 
     private static String createProjectRefactoringIdentifier(String projectId, String startCommitId, String endCommitId) {
